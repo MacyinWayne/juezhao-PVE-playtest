@@ -1,0 +1,63 @@
+{
+ "system": {
+  "name": "江湖残局",
+  "subtitle": "《抉招：江湖录》跑团战斗环节试玩 · 高难挑战",
+  "tagline": "一局残局，一场没退路的过招。",
+  "footer": "单机 · 无需登录 · 无内购 · 更多剧本筹备中"
+ },
+ "decks": {
+  "YJQ": {
+   "name": "易金权 · 千手水冥",
+   "short": "千手水冥",
+   "desc": "暗器卡组 · 上段/下段为主 · 5 张秘笈",
+   "file": "cards.json"
+  }
+ },
+ "bosses": {
+  "shark": {
+   "name": "罐中鲨",
+   "code": "XS-01",
+   "file": "boss.json"
+  }
+ },
+ "challenges": [
+  {
+   "id": "shark",
+   "order": 1,
+   "scriptNo": "剧本一",
+   "name": "罐中鲨",
+   "code": "XS-01",
+   "subtitle": "廷州海滨 · 异兽之局",
+   "difficulty": "高难",
+   "difficultyStars": 4,
+   "status": "open",
+   "deckId": "YJQ",
+   "bossId": "shark",
+   "duration": "约 5–10 分钟",
+   "tags": [
+    "异兽",
+    "海滨",
+    "独战"
+   ],
+   "story": "凰历431年，廷州海滨，一只异兽肆虐乡里。武林盟主易金权孤身一人前来应对，经过一番苦战，易金权终于惨胜此兽……",
+   "cast": [
+    {
+     "name": "罐中鲨",
+     "line": "深海中可怖的异兽，统领不死不休的海中妖族。"
+    },
+    {
+     "name": "易金权",
+     "line": "器若流星似千手，无我无形终归一。"
+    }
+   ],
+   "quote": "罐碎潮平，鲨首伏诛。"
+  }
+ ],
+ "upcoming": [
+  {
+   "id": "next-01",
+   "name": "下一场残局",
+   "note": "筹备中 · 新的敌人与卡组将陆续开放"
+  }
+ ]
+}

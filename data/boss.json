@@ -1,0 +1,884 @@
+{
+ "name": "罐中鲨",
+ "code": "XS-01",
+ "collabSuffix": "",
+ "nature": "首领",
+ "phases": {
+  "p1": {
+   "hp": 60,
+   "pool": 7
+  },
+  "p2": {
+   "fakeHp": 20,
+   "pool": 7
+  }
+ },
+ "phaseNodes": [
+  45,
+  30,
+  15
+ ],
+ "summons": {
+  "15": {
+   "shrimp": 2,
+   "crab": 1
+  },
+  "30": {
+   "shrimp": 2,
+   "crab": 0
+  },
+  "45": {
+   "shrimp": 1,
+   "crab": 0
+  }
+ },
+ "opening": {
+  "summon": "shrimp",
+  "count": 1
+ },
+ "intents": {
+  "p1": [
+   {
+    "id": "p1s1",
+    "label": "潮唤·起手",
+    "marks": {
+     "jq": 0,
+     "bs": 0,
+     "lh": 7
+    },
+    "hidden": true,
+    "weight": 1,
+    "plan": [
+     "callShrimp",
+     "healingTide",
+     "slipFin",
+     "slipFin"
+    ]
+   },
+   {
+    "id": "p1s2",
+    "label": "激流骗进",
+    "marks": {
+     "jq": 3,
+     "bs": 0,
+     "lh": 4
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "waterArrow",
+     "waterArrow",
+     "callShrimp",
+     "slipFin"
+    ]
+   },
+   {
+    "id": "p1s3",
+    "label": "甲阵构筑",
+    "marks": {
+     "jq": 1,
+     "bs": 4,
+     "lh": 2
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "thickScale",
+     "scaleArmor",
+     "slipFin",
+     "waterArrow"
+    ]
+   },
+   {
+    "id": "p1s4",
+    "label": "潮汐疗愈",
+    "marks": {
+     "jq": 0,
+     "bs": 3,
+     "lh": 4
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "healingTide",
+     "slipFin",
+     "scaleArmor"
+    ]
+   },
+   {
+    "id": "p1s5",
+    "label": "怒涛攻守",
+    "marks": {
+     "jq": 3,
+     "bs": 4,
+     "lh": 0
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "waterArrow",
+     "waterArrow",
+     "waterArrow",
+     "thickScale",
+     "scaleArmor"
+    ]
+   },
+   {
+    "id": "p1s6",
+    "label": "百变潮势",
+    "marks": {
+     "jq": 2,
+     "bs": 2,
+     "lh": 3
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "waterArrow",
+     "callShrimp",
+     "slipFin",
+     "scaleArmor"
+    ]
+   },
+   {
+    "id": "p1s7",
+    "label": "破鳞连击",
+    "marks": {
+     "jq": 7,
+     "bs": 0,
+     "lh": 0
+    },
+    "hidden": true,
+    "weight": 1,
+    "plan": [
+     "waterArrow",
+     "waterArrow",
+     "waterArrow",
+     "waterArrow",
+     "waterArrow",
+     "waterArrow"
+    ]
+   }
+  ],
+  "p2": [
+   {
+    "id": "p2s1",
+    "label": "鳞甲反震",
+    "marks": {
+     "jq": 4,
+     "bs": 3,
+     "lh": 0
+    },
+    "hidden": true,
+    "weight": 1,
+    "plan": [
+     "maw",
+     "steelBulwark",
+     "frenzyBite",
+     "ironScale"
+    ]
+   },
+   {
+    "id": "p2s2",
+    "label": "狂鲨掠食",
+    "marks": {
+     "jq": 3,
+     "bs": 0,
+     "lh": 4
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "maw",
+     "frenzyBite",
+     "swimShark",
+     "swimShark"
+    ]
+   },
+   {
+    "id": "p2s3",
+    "label": "百变潮势·怒",
+    "marks": {
+     "jq": 2,
+     "bs": 3,
+     "lh": 2
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "maw",
+     "ironScale",
+     "swimShark",
+     "swimShark"
+    ]
+   },
+   {
+    "id": "p2s4",
+    "label": "深海嗜血",
+    "marks": {
+     "jq": 0,
+     "bs": 3,
+     "lh": 4
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "tideRevive",
+     "swimShark",
+     "ironScale"
+    ]
+   },
+   {
+    "id": "p2s5",
+    "label": "潮涌攻防",
+    "marks": {
+     "jq": 3,
+     "bs": 2,
+     "lh": 2
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "frenzyBite",
+     "steelBulwark",
+     "darkTide",
+     "frenzyBite"
+    ]
+   },
+   {
+    "id": "p2s6",
+    "label": "百变潮势·影",
+    "marks": {
+     "jq": 2,
+     "bs": 2,
+     "lh": 3
+    },
+    "hidden": false,
+    "weight": 2,
+    "plan": [
+     "reverseMirage",
+     "frenzyBite",
+     "ironScale",
+     "swimShark"
+    ]
+   },
+   {
+    "id": "p2s7",
+    "label": "深渊暴噬",
+    "marks": {
+     "jq": 7,
+     "bs": 0,
+     "lh": 0
+    },
+    "hidden": true,
+    "weight": 1,
+    "plan": [
+     "maw",
+     "maw",
+     "maw"
+    ]
+   }
+  ]
+ },
+ "skills": {
+  "p1": [
+   {
+    "id": "waterArrow",
+    "name": "水箭",
+    "cost": {
+     "jq": 1
+    },
+    "effects": [
+     {
+      "op": "damage",
+      "v": 3
+     }
+    ]
+   },
+   {
+    "id": "scaleArmor",
+    "name": "鳞甲",
+    "cost": {
+     "bs": 1
+    },
+    "effects": [
+     {
+      "op": "block",
+      "v": 2
+     }
+    ]
+   },
+   {
+    "id": "slipFin",
+    "name": "滑鳍",
+    "cost": {
+     "lh": 1
+    },
+    "effects": [
+     {
+      "op": "dodge",
+      "v": 1
+     }
+    ]
+   },
+   {
+    "id": "thickScale",
+    "name": "厚鳞",
+    "cost": {
+     "bs": 2
+    },
+    "effects": [
+     {
+      "op": "block",
+      "v": 5
+     }
+    ]
+   },
+   {
+    "id": "callShrimp",
+    "name": "潮唤·虾兵",
+    "cost": {
+     "lh": 2
+    },
+    "effects": [
+     {
+      "op": "summon",
+      "unit": "shrimp",
+      "count": 1
+     }
+    ]
+   },
+   {
+    "id": "tideCommand",
+    "name": "狂潮号令",
+    "cost": {
+     "jq": 2,
+     "bs": 1
+    },
+    "effects": [
+     {
+      "op": "allyDamageBuff",
+      "v": 1
+     }
+    ]
+   },
+   {
+    "id": "tidalBarrier",
+    "name": "潮汐屏障",
+    "cost": {
+     "bs": 2,
+     "lh": 1
+    },
+    "effects": [
+     {
+      "op": "allyBlock",
+      "v": 2
+     }
+    ]
+   },
+   {
+    "id": "callCrab",
+    "name": "潮唤·蟹将",
+    "cost": {
+     "lh": 2,
+     "jq": 2
+    },
+    "effects": [
+     {
+      "op": "summon",
+      "unit": "crab",
+      "count": 1
+     }
+    ]
+   },
+   {
+    "id": "healingTide",
+    "name": "治愈潮水",
+    "cost": {
+     "lh": 3
+    },
+    "effects": [
+     {
+      "op": "allyHeal",
+      "v": 4
+     }
+    ]
+   },
+   {
+    "id": "mirrorMist",
+    "name": "水镜迷踪",
+    "cost": {
+     "bs": 2,
+     "lh": 2
+    },
+    "effects": [
+     {
+      "op": "allyDodge",
+      "v": 1
+     }
+    ]
+   }
+  ],
+  "p2": [
+   {
+    "id": "frenzyBite",
+    "name": "狂鲨撕咬",
+    "cost": {
+     "jq": 1
+    },
+    "effects": [
+     {
+      "op": "damage",
+      "v": 3
+     }
+    ]
+   },
+   {
+    "id": "ironScale",
+    "name": "铁鳞甲",
+    "cost": {
+     "bs": 1
+    },
+    "effects": [
+     {
+      "op": "block",
+      "v": 2
+     }
+    ]
+   },
+   {
+    "id": "swimShark",
+    "name": "游鲨",
+    "cost": {
+     "lh": 1
+    },
+    "effects": [
+     {
+      "op": "dodge",
+      "v": 1
+     }
+    ]
+   },
+   {
+    "id": "maw",
+    "name": "血盆大口",
+    "cost": {
+     "jq": 2
+    },
+    "effects": [
+     {
+      "op": "damage",
+      "v": 7
+     }
+    ]
+   },
+   {
+    "id": "rapidBites",
+    "name": "狂鲨连咬",
+    "cost": {
+     "jq": 3
+    },
+    "effects": [
+     {
+      "op": "multiDamage",
+      "v": 2,
+      "times": 5
+     }
+    ]
+   },
+   {
+    "id": "steelBulwark",
+    "name": "钢鳞壁垒",
+    "cost": {
+     "bs": 2
+    },
+    "effects": [
+     {
+      "op": "block",
+      "v": 5
+     }
+    ]
+   },
+   {
+    "id": "darkTide",
+    "name": "暗潮缠身",
+    "cost": {
+     "lh": 2
+    },
+    "effects": [
+     {
+      "op": "playerPlayLimit",
+      "v": 1
+     }
+    ]
+   },
+   {
+    "id": "reverseMirage",
+    "name": "逆流幻象",
+    "cost": {
+     "lh": 3
+    },
+    "effects": [
+     {
+      "op": "playerRouteLock",
+      "count": 3,
+      "turns": 1
+     }
+    ]
+   },
+   {
+    "id": "ragingWave",
+    "name": "怒鲨破浪",
+    "cost": {
+     "jq": 2,
+     "lh": 2
+    },
+    "effects": [
+     {
+      "op": "damage",
+      "v": 6
+     },
+     {
+      "op": "playerDamageDebuff",
+      "v": 1,
+      "turns": 1
+     }
+    ]
+   },
+   {
+    "id": "tideRevive",
+    "name": "潮噬回生",
+    "cost": {
+     "bs": 2,
+     "lh": 2
+    },
+    "effects": [
+     {
+      "op": "healFake",
+      "v": 5
+     },
+     {
+      "op": "dodge",
+      "v": 2
+     }
+    ]
+   },
+   {
+    "id": "reverseScale",
+    "name": "逆鳞反噬",
+    "cost": {
+     "jq": 2,
+     "bs": 2
+    },
+    "effects": [
+     {
+      "op": "damage",
+      "v": 4
+     },
+     {
+      "op": "retaliate",
+      "perHit": 2
+     }
+    ]
+   }
+  ]
+ },
+ "minions": {
+  "shrimp": {
+   "name": "虾兵",
+   "code": "VR-02",
+   "nature": "杂兵",
+   "hp": 15,
+   "intents": [
+    {
+     "id": "v1",
+     "label": "乱钳突刺",
+     "marks": {
+      "jq": 3,
+      "bs": 0,
+      "lh": 0
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "shrimpStab",
+      "shrimpStab",
+      "shrimpStab"
+     ]
+    },
+    {
+     "id": "v2",
+     "label": "缩壳固守",
+     "marks": {
+      "jq": 1,
+      "bs": 2,
+      "lh": 0
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "shellHard",
+      "shellHard",
+      "shrimpStab"
+     ]
+    },
+    {
+     "id": "v3",
+     "label": "潜游偷袭",
+     "marks": {
+      "jq": 2,
+      "bs": 0,
+      "lh": 1
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "shrimpStab",
+      "bubbleHeal",
+      "shrimpStab"
+     ]
+    }
+   ],
+   "skills": [
+    {
+     "id": "shrimpStab",
+     "name": "虾钳猛刺",
+     "cost": {
+      "jq": 1
+     },
+     "effects": [
+      {
+       "op": "damage",
+       "v": 2
+      }
+     ]
+    },
+    {
+     "id": "doublePincer",
+     "name": "双钳连击",
+     "cost": {
+      "jq": 2
+     },
+     "effects": [
+      {
+       "op": "damage",
+       "v": 5
+      }
+     ]
+    },
+    {
+     "id": "shellHard",
+     "name": "甲壳硬化",
+     "cost": {
+      "bs": 1
+     },
+     "effects": [
+      {
+       "op": "block",
+       "v": 2
+      }
+     ]
+    },
+    {
+     "id": "bubbleHeal",
+     "name": "水泡自愈",
+     "cost": {
+      "lh": 1
+     },
+     "effects": [
+      {
+       "op": "healSelf",
+       "v": 1
+      }
+     ]
+    }
+   ]
+  },
+  "crab": {
+   "name": "蟹将",
+   "code": "VR-03",
+   "nature": "精英",
+   "hp": 30,
+   "intents": [
+    {
+     "id": "c1",
+     "label": "巨钳强袭",
+     "marks": {
+      "jq": 4,
+      "bs": 1,
+      "lh": 0
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "crabSmash",
+      "crabSmash",
+      "shellHard"
+     ]
+    },
+    {
+     "id": "c2",
+     "label": "横冲直撞",
+     "marks": {
+      "jq": 3,
+      "bs": 0,
+      "lh": 2
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "crabSmash",
+      "chargeSmash"
+     ]
+    },
+    {
+     "id": "c3",
+     "label": "攻守兼备",
+     "marks": {
+      "jq": 2,
+      "bs": 2,
+      "lh": 1
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "ironWall",
+      "crabSmash",
+      "pincerOrder"
+     ]
+    },
+    {
+     "id": "c4",
+     "label": "坚壁龟缩",
+     "marks": {
+      "jq": 0,
+      "bs": 3,
+      "lh": 2
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "ironWall",
+      "shellHard",
+      "pincerOrder"
+     ]
+    },
+    {
+     "id": "c5",
+     "label": "潜行钳袭",
+     "marks": {
+      "jq": 0,
+      "bs": 1,
+      "lh": 4
+     },
+     "hidden": false,
+     "weight": 2,
+     "plan": [
+      "chargeSmash",
+      "pincerOrder",
+      "ironWall"
+     ]
+    }
+   ],
+   "skills": [
+    {
+     "id": "crabSmash",
+     "name": "巨钳挥击",
+     "cost": {
+      "jq": 1
+     },
+     "effects": [
+      {
+       "op": "damage",
+       "v": 2
+      }
+     ]
+    },
+    {
+     "id": "crabHeavy",
+     "name": "蟹螯重击",
+     "cost": {
+      "jq": 2
+     },
+     "effects": [
+      {
+       "op": "damage",
+       "v": 5
+      }
+     ]
+    },
+    {
+     "id": "shellHard",
+     "name": "蟹壳硬化",
+     "cost": {
+      "bs": 1
+     },
+     "effects": [
+      {
+       "op": "block",
+       "v": 2
+      }
+     ]
+    },
+    {
+     "id": "ironWall",
+     "name": "铁甲壁垒",
+     "cost": {
+      "bs": 2
+     },
+     "effects": [
+      {
+       "op": "block",
+       "v": 5
+      }
+     ]
+    },
+    {
+     "id": "pincerOrder",
+     "name": "蟹钳号令",
+     "cost": {
+      "lh": 1
+     },
+     "effects": [
+      {
+       "op": "allyDamageBuff",
+       "v": 1,
+       "unit": "shrimp"
+      }
+     ]
+    },
+    {
+     "id": "chargeSmash",
+     "name": "蓄力猛击",
+     "cost": {
+      "lh": 2
+     },
+     "effects": [
+      {
+       "op": "selfDamageBuff",
+       "v": 2
+      }
+     ]
+    },
+    {
+     "id": "pincerBreak",
+     "name": "横钳断势",
+     "cost": {
+      "jq": 2,
+      "bs": 1
+     },
+     "effects": [
+      {
+       "op": "damage",
+       "v": 3
+      },
+      {
+       "op": "playerPlayLimit",
+       "v": 1
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

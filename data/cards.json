@@ -1,0 +1,268 @@
+{
+ "player": {
+  "name": "易金权",
+  "title": "武林盟主 · 千手水冥",
+  "maxHp": 40,
+  "drawPerTurn": 6,
+  "playLimit": 5,
+  "manualLimitPerTurn": 1
+ },
+ "cards": [
+  {
+   "id": "YJQ-AQ-01",
+   "name": "常式·破气弹",
+   "type": "招式",
+   "route": "上",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人造成5点伤害。"
+  },
+  {
+   "id": "YJQ-AQ-02",
+   "name": "常式·双星打",
+   "type": "招式",
+   "route": "上",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人，造成3点伤害2次。"
+  },
+  {
+   "id": "YJQ-AQ-03",
+   "name": "常式·连环弹",
+   "type": "招式",
+   "route": "上",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人，造成1点伤害5次。"
+  },
+  {
+   "id": "YJQ-AQ-04",
+   "name": "常式·绽血枫",
+   "type": "招式",
+   "route": "上",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人造成4点伤害，若成功造成伤害，恢复等量HP。"
+  },
+  {
+   "id": "YJQ-AQ-05",
+   "name": "常式·子母弹",
+   "type": "招式",
+   "route": "上",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人造成1点伤害，再造成2点伤害，下回合开始时多抽2张。"
+  },
+  {
+   "id": "YJQ-AQ-06",
+   "name": "变式·飞花叶",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人造成5点伤害。"
+  },
+  {
+   "id": "YJQ-AQ-07",
+   "name": "变式·连飞蝗",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "enemy",
+   "desc": "选择1个敌人造成1点伤害3次，并消除其1个进取意图。"
+  },
+  {
+   "id": "YJQ-AQ-08",
+   "name": "变式·诸星落",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "enemies3",
+   "desc": "选择场上最多3个敌人单位，对其各造成1点伤害4次。"
+  },
+  {
+   "id": "YJQ-AQ-09",
+   "name": "变式·定千军",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "jqIntentsDynamic",
+   "desc": "场上每存在1个敌人单位，可消除1个任意敌人的进取意图。"
+  },
+  {
+   "id": "YJQ-AQ-10",
+   "name": "变式·赶星月",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "none",
+   "desc": "场上所有敌人每存在1个进取意图，你获得1层闪避。"
+  },
+  {
+   "id": "YJQ-AQ-11",
+   "name": "变式·锱铢较",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "none",
+   "desc": "场上所有敌人每存在1个非进取意图，你获得2点格挡。"
+  },
+  {
+   "id": "YJQ-AQ-12",
+   "name": "变式·黑白错",
+   "type": "招式",
+   "route": "下",
+   "copies": 3,
+   "select": "none",
+   "desc": "本回合后续施展的单体招式，可令其增加两个攻击对象。"
+  },
+  {
+   "id": "YJQ-AQ-13",
+   "name": "神兵·玄寒珠",
+   "type": "招式",
+   "route": "特",
+   "copies": 2,
+   "select": "none",
+   "desc": "本回合内后续招式若命中敌人，每命中一次令其下回合意图池-1（灵活→进取→保守）。"
+  },
+  {
+   "id": "YJQ-AQ-14",
+   "name": "通式·变轨弹",
+   "type": "招式",
+   "route": "中",
+   "copies": 2,
+   "select": "route",
+   "desc": "宣言路数：上=5点伤害；中=1点+4点伤害；下=1点伤害5次；特=恢复5点HP。"
+  },
+  {
+   "id": "YJQ-LL-01",
+   "name": "凰宫密谈",
+   "type": "履历",
+   "route": "特",
+   "copies": 1,
+   "select": "none",
+   "desc": "场上所有敌人每拥有一个非进取意图，获得1点HP上限+1层闪避。"
+  },
+  {
+   "id": "YJQ-LL-02",
+   "name": "为师则厉",
+   "type": "履历",
+   "route": "上",
+   "copies": 1,
+   "select": "none",
+   "desc": "若我方人数少于敌方总人数，本回合后续我方每一段攻击+1点伤害。"
+  },
+  {
+   "id": "YJQ-LL-03",
+   "name": "为人表率",
+   "type": "履历",
+   "route": "中",
+   "copies": 1,
+   "select": "none",
+   "desc": "若我方血量低于5点，扣除5点HP上限后，将我方血量恢复至HP上限。"
+  },
+  {
+   "id": "YJQ-LL-04",
+   "name": "为父则严",
+   "type": "履历",
+   "route": "中",
+   "copies": 1,
+   "select": "none",
+   "desc": "扣除自身5点HP，对场上所有敌人造成5点真实必中伤害。"
+  },
+  {
+   "id": "YJQ-LL-05",
+   "name": "金权可易",
+   "type": "履历",
+   "route": "下",
+   "copies": 1,
+   "select": "convert",
+   "desc": "选择1个敌人，将其任意一类意图全部修改为另一类意图。"
+  },
+  {
+   "id": "YJQ-SF-01",
+   "name": "盟主号令",
+   "type": "身份",
+   "route": "特",
+   "copies": 1,
+   "select": "none",
+   "desc": "场上所有敌人每有一个进取意图，获得2点格挡+1层化劲。"
+  },
+  {
+   "id": "YJQ-SF-02",
+   "name": "杯酒停戎",
+   "type": "身份",
+   "route": "上",
+   "copies": 1,
+   "select": "minion",
+   "desc": "选择1个杂兵，恢复其4点HP；超出上限的部分每1点，获得1回合操控权。"
+  },
+  {
+   "id": "YJQ-SF-03",
+   "name": "行事以中",
+   "type": "身份",
+   "route": "中",
+   "copies": 1,
+   "select": "none",
+   "desc": "获得6点格挡；若本回合已用的上段与下段卡数量相等，额外+6点格挡。"
+  },
+  {
+   "id": "YJQ-SF-04",
+   "name": "万事当先",
+   "type": "身份",
+   "route": "下",
+   "copies": 1,
+   "select": "none",
+   "desc": "接下来2张牌每次伤害+1；若这是本回合打出的首张牌，改为3张。"
+  },
+  {
+   "id": "YJQ-SF-05",
+   "name": "深不可测",
+   "type": "身份",
+   "route": "下",
+   "copies": 1,
+   "select": "none",
+   "desc": "获得5点化劲。"
+  }
+ ],
+ "manuals": [
+  {
+   "id": "YJQ-MJ-01",
+   "name": "千手水冥·诸天八打",
+   "routeSeq": "下上下",
+   "select": "jqIntents8",
+   "desc": "消除最多8个进取意图，每消除一个，对被消除的单位造成2点伤害。"
+  },
+  {
+   "id": "YJQ-MJ-02",
+   "name": "千手水冥·聚啸潮涌",
+   "routeSeq": "上下下",
+   "select": "jqIntents6",
+   "desc": "选最多6个进取意图：说书人逐个决定是否放弃消除——放弃则对其造成1点伤害3次。"
+  },
+  {
+   "id": "YJQ-MJ-03",
+   "name": "千手水冥·骤雨入冥",
+   "routeSeq": "上上上下",
+   "select": "bet",
+   "desc": "投入5~15点HP上限，对全体敌人造成1点伤害，次数等于投入值。"
+  },
+  {
+   "id": "YJQ-MJ-04",
+   "name": "千手水冥·天罗地网",
+   "routeSeq": "上下下上",
+   "select": "none",
+   "desc": "接下来5次受攻击时，对伤害来源造成1点伤害3次。"
+  },
+  {
+   "id": "YJQ-MJ-05",
+   "name": "千手水冥·千手归一",
+   "routeSeq": "下上上下中",
+   "select": "enemy",
+   "requires": {
+    "hpMin": 21
+   },
+   "desc": "HP>20可用。选定目标造成10点真实伤害，然后HP→1，每扣1点HP真实伤害+2；若未获胜则战败。"
+  }
+ ]
+}
