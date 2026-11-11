@@ -1927,7 +1927,9 @@
     markCardSelected(index);
     var select = card.select || 'none';
     if (select === 'none') { playCardNow(index, {}); return; }
-    var extraAllowed = !!(s.player && s.player.multiSplash) && card.type === '招式' && select === 'enemy' && card.id !== 'YJQ-AQ-14';
+    var extraAllowed = !!(s.player && s.player.multiSplash) && card.type === '招式' &&
+      (select === 'enemy' || (select === 'route' && card.id === 'YJQ-AQ-14'));
+    ui.lastExtraAllowed = extraAllowed;
     openChoice(select, {
       title: card.name,
       subtitle: '出牌 · ' + (card.type || '卡') + ' · 倾向「' + (MARK_MAP[ROUTE_MARK[card.route]] ? MARK_MAP[ROUTE_MARK[card.route]].label : '隐藏') + '」',
@@ -2564,18 +2566,79 @@
       }
       case 'route': {
         var routeRows = [], targetArea = el('div', 'choice__sec');
-        var routeButtons = [];
+        var routeButtons = [], routeExtraIds = [];
+        /* 黑白错额外目标区：只在 上/中/下 + 已选主目标 后出现，「特」不出现 */
+        var routeExtraArea = el('div', 'choice__sec');
+        function refreshRouteExtra() {
+          var needsTarget = !!value.route && value.route !== '特';
+          if (!extraAllowed || !needsTarget || !value.targetId) {
+            if (routeExtraArea.parentNode) routeExtraArea.parentNode.removeChild(routeExtraArea);
+            return;
+          }
+          clear(routeExtraArea);
+          routeExtraArea.appendChild(el('h3', 'choice__title', '黑白错 · 额外目标（最多 2 个，可不选）'));
+          var pool = aliveEnemies(s).filter(function (e) { return e.id !== value.targetId; });
+          if (!pool.length) { routeExtraArea.appendChild(note('没有其他存活敌人')); }
+          else {
+            var gridX = el('div', 'tgt-list');
+            for (var k = 0; k < pool.length; k++) {
+              var e = pool[k];
+              var row = enemyRow(e, {});
+              if (routeExtraIds.indexOf(e.id) >= 0) addClass(row, 'is-selected');
+              on(row, 'click', (function (enemy, node) {
+                return function () {
+                  var idx = routeExtraIds.indexOf(enemy.id);
+                  if (idx >= 0) { routeExtraIds.splice(idx, 1); removeClass(node, 'is-selected'); }
+                  else {
+                    if (routeExtraIds.length >= 2) { toast('最多再选 2 个额外目标'); return; }
+                    routeExtraIds.push(enemy.id); addClass(node, 'is-selected');
+                  }
+                  value.extraTargetIds = routeExtraIds.slice();
+                  refreshRouteExtra();
+                };
+              })(e, row));
+              gridX.appendChild(row);
+            }
+            routeExtraArea.appendChild(gridX);
+            routeExtraArea.appendChild(note('已选 ' + routeExtraIds.length + ' / 2（主目标：' + targetNames([value.targetId]) + '）'));
+          }
+          if (!routeExtraArea.parentNode) body.appendChild(routeExtraArea);
+        }
         function refreshRouteTarget() {
           clear(targetArea);
-          if (!value.route) { targetArea.appendChild(note('先选择倾向；进取/保守/灵活 还需要选 1 个目标')); setComplete(false); return; }
-          if (value.route === '特') { delete value.targetId; targetArea.appendChild(note('「隐藏」无需目标')); setComplete(true); return; }
+          /* 路由切换/主目标变化时，额外目标里不能还留着主目标 */
+          routeExtraIds = routeExtraIds.filter(function (x) { return x !== value.targetId; });
+          value.extraTargetIds = routeExtraIds.slice();
+          if (!value.route) {
+            targetArea.appendChild(note('先选择倾向；进取/保守/灵活 还需要选 1 个目标'));
+            refreshRouteExtra();
+            setComplete(false);
+            return;
+          }
+          if (value.route === '特') {
+            delete value.targetId;
+            value.extraTargetIds = [];
+            routeExtraIds = [];
+            targetArea.appendChild(note('「隐藏」无需目标'));
+            refreshRouteExtra();
+            setComplete(true);
+            return;
+          }
           targetArea.appendChild(el('h3', 'choice__title', '选择目标（该倾向需要 1 个敌人）'));
           var built = enemySection(s, {
-            onPick: function (e) { value.targetId = e.id; markSelectedRows(routeRows, e.id); setComplete(true); }
+            onPick: function (e) {
+              value.targetId = e.id;
+              routeExtraIds = routeExtraIds.filter(function (x) { return x !== e.id; });
+              value.extraTargetIds = routeExtraIds.slice();
+              markSelectedRows(routeRows, e.id);
+              refreshRouteExtra();
+              setComplete(true);
+            }
           });
           routeRows = built.rows;
           targetArea.appendChild(built.wrap);
           if (value.targetId) markSelectedRows(routeRows, value.targetId);
+          refreshRouteExtra();
           setComplete(!!value.targetId);
         }
         var secRoute = section('宣言倾向');
@@ -2588,7 +2651,8 @@
           rb.appendChild(el('span', 'route-btn__t', MARK_MAP[mkk].label));
           on(rb, 'click', (function (route) {
             return function () {
-              value.route = route; value.targetId = null; routeRows = [];
+              value.route = route; value.targetId = null; routeRows = []; routeExtraIds = [];
+              value.extraTargetIds = [];
               for (var k = 0; k < routeButtons.length; k++) {
                 if (routeButtons[k].route === route) addClass(routeButtons[k].node, 'is-selected'); else removeClass(routeButtons[k].node, 'is-selected');
               }
@@ -2762,7 +2826,10 @@
     if (select === 'enemies3') { out.targetIds = (value.targetIds || []).slice(); return out; }
     if (select === 'route') {
       out.route = value.route || '上';
-      if (out.route !== '特' && value.targetId) out.targetId = value.targetId;
+      if (out.route !== '特') {
+        if (value.targetId) out.targetId = value.targetId;
+        if (value.extraTargetIds && value.extraTargetIds.length) out.extraTargetIds = value.extraTargetIds.slice();
+      }
       return out;
     }
     if (select === 'convert') { out.targetId = value.targetId || ''; out.from = value.from || 'jq'; out.to = value.to || 'bs'; return out; }

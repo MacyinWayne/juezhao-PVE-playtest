@@ -285,35 +285,96 @@
   }
 
   // ------------------------------------------------------------
-  // 敌方一次完整行动（SPEC §四.b）
-  //   ① plan 按顺序尽量施展 ② 剩余标记贪心补齐 ③ 未用完标记由引擎作废
+  // 技能分类（SPEC §10.11.2 R27/R28）
+  //   组合（cost 涉及 ≥2 类标记，或数据显式 skill.priority）→ 最先
+  //   增益/灵活组（allyDamageBuff/allyBlock/allyDodge/allyHeal/selfDamageBuff/
+  //     playerDamageDebuff/playerPlayLimit/playerRouteLock/summon/healSelf/healFake）
+  //   → 保守/防御组（仅 block/dodge/hua）→ 最后进取/攻击组（damage/multiDamage）
   // ------------------------------------------------------------
-  function runAction(ctx, entity) {
-    var skills = entity._skills || [];
-    var plan = entity._plan || [];
-    var cast = 0;
-    var i;
+  var BUFF_OPS = {
+    allyDamageBuff: 1, allyBlock: 1, allyDodge: 1, allyHeal: 1, selfDamageBuff: 1,
+    playerDamageDebuff: 1, playerPlayLimit: 1, playerRouteLock: 1,
+    summon: 1, healSelf: 1, healFake: 1
+  };
+  var DEFENSE_OPS = { block: 1, dodge: 1, hua: 1 };
+  var DAMAGE_OPS = { damage: 1, multiDamage: 1 };
 
+  function costMarkTypes(skill) {
+    var c = (skill && skill.cost) || {};
+    var n = 0;
+    if ((Number(c.jq) || 0) > 0) n++;
+    if ((Number(c.bs) || 0) > 0) n++;
+    if ((Number(c.lh) || 0) > 0) n++;
+    return n;
+  }
+  /** 技能分组：priority(0) → combo(1) → buff(2) → defense(3) → attack(4) */
+  function skillGroup(skill) {
+    if (!skill) return { group: 'attack', rank: 4 };
+    if (typeof skill.priority === 'number' && isFinite(skill.priority)) {
+      return { group: 'priority', rank: 0, priority: Math.max(0, skill.priority) };
+    }
+    if (costMarkTypes(skill) >= 2) return { group: 'combo', rank: 1 };
+    var effs = skill.effects || [];
+    var hasBuff = false;
+    var hasDamage = false;
+    var allDefense = effs.length > 0;
+    for (var i = 0; i < effs.length; i++) {
+      var op = effs[i].op;
+      if (BUFF_OPS[op]) hasBuff = true;
+      if (DAMAGE_OPS[op]) hasDamage = true;
+      if (!DEFENSE_OPS[op]) allDefense = false;
+    }
+    if (hasBuff) return { group: 'buff', rank: 2 };
+    if (hasDamage) return { group: 'attack', rank: 4 };
+    if (allDefense) return { group: 'defense', rank: 3 };
+    return { group: 'attack', rank: 4 };
+  }
+
+  // ------------------------------------------------------------
+  // 选招推演（SPEC §10.11.3 第 1 步）：在自身剩余意图池内选出本回合技能序列
+  //   只推演、不执行；确定性（无随机，平手按数据顺序）
+  //   logFn 可选：fallback 路径下用于记录「plan 引用未知技能」
+  // ------------------------------------------------------------
+  function canAffordMark(cost, marks) {
+    cost = cost || {};
+    return (Number(cost.jq) || 0) <= marks.jq &&
+      (Number(cost.bs) || 0) <= marks.bs &&
+      (Number(cost.lh) || 0) <= marks.lh;
+  }
+  function payMark(marks, cost) {
+    cost = cost || {};
+    marks.jq -= Number(cost.jq) || 0;
+    marks.bs -= Number(cost.bs) || 0;
+    marks.lh -= Number(cost.lh) || 0;
+    return marks;
+  }
+  function selectSequence(entity, logFn) {
+    var skills = (entity && entity._skills) || [];
+    var plan = (entity && entity._plan) || [];
+    var marks = {
+      jq: Number(entity && entity.intents && entity.intents.jq) || 0,
+      bs: Number(entity && entity.intents && entity.intents.bs) || 0,
+      lh: Number(entity && entity.intents && entity.intents.lh) || 0
+    };
+    var out = [];
+    var i;
     // ① plan：按顺序「尽量施展」
     for (i = 0; i < plan.length; i++) {
-      if (ctx.over()) return;
-      var skillId = plan[i];
-      var sk = findSkill(skills, skillId);
+      var sk = findSkill(skills, plan[i]);
       if (!sk) {
-        ctx.log('error', '意图套组 plan 引用了未知技能：' + skillId + '（' + entity.name + '）');
+        if (typeof logFn === 'function') logFn('error', '意图套组 plan 引用了未知技能：' + plan[i] + '（' + entity.name + '）');
         continue;
       }
-      if (!ctx.afford(entity, sk.cost || {})) continue;
-      if (castSkill(ctx, entity, sk)) cast++;
+      if (!canAffordMark(sk.cost, marks)) continue;
+      payMark(marks, sk.cost);
+      out.push(sk);
     }
-
-    // ② 剩余标记：贪心补齐（取「价值 / 消耗」最高，平手按数据顺序）
+    // ② 剩余标记：贪心补齐（价值 / 消耗最高，平手按数据顺序）
     var guard = 0;
-    while (!ctx.over() && guard < MAX_LOOPS) {
-      guard++;
+    while (guard++ < MAX_LOOPS) {
       var usable = [];
       for (i = 0; i < skills.length; i++) {
-        if (ctx.afford(entity, skills[i].cost || {})) usable.push(skills[i]);
+        if (canAffordMark(skills[i].cost, marks)) usable.push(skills[i]);
       }
       if (!usable.length) break;
       var best = usable[0];
@@ -322,20 +383,226 @@
         var sc = skillScore(usable[i]);
         if (sc > bestScore + 1e-9) { best = usable[i]; bestScore = sc; }
       }
-      if (!castSkill(ctx, entity, best)) break;
-      cast++;
+      payMark(marks, best.cost);
+      out.push(best);
     }
+    return out;
+  }
 
+  // ------------------------------------------------------------
+  // 攻击段估算（针对玩家当前防御状态：闪避逐层、格挡池、化劲一次性）
+  // ------------------------------------------------------------
+  function clonePlayerDef(p) {
+    return {
+      dodge: Math.max(0, Number(p && p.dodge) || 0),
+      block: Math.max(0, Number(p && p.block) || 0),
+      hua: Math.max(0, Number(p && p.hua) || 0),
+      hp: Math.max(0, Number(p && p.hp) || 0)
+    };
+  }
+  /** 单段对玩家结算（与引擎 resolveDamage 同规则），返回实际伤害 */
+  function applySegmentToDef(st, amount) {
+    if (st.hp <= 0) return 0;
+    var remain = Math.max(0, Number(amount) || 0);
+    if (remain <= 0) return 0;
+    if (st.dodge > 0) { st.dodge -= 1; return 0; }
+    if (st.block > 0) {
+      var b = Math.min(st.block, remain);
+      st.block -= b;
+      remain -= b;
+    }
+    if (st.hua > 0 && remain > 0) {
+      var h = Math.min(st.hua, remain);
+      st.hua = 0;
+      remain -= h;
+    }
+    var dealt = Math.min(remain, st.hp);
+    st.hp -= dealt;
+    return dealt;
+  }
+  function attackSegments(skill, dmgBonus) {
+    var segs = [];
+    var effs = (skill && skill.effects) || [];
+    var bonus = Number(dmgBonus) || 0;
+    for (var i = 0; i < effs.length; i++) {
+      var op = effs[i];
+      var v = Math.max(0, (Number(op.v) || 0) + bonus);
+      if (op.op === 'damage') segs.push(v);
+      else if (op.op === 'multiDamage') {
+        var times = Math.max(1, Number(op.times) || 1);
+        for (var t = 0; t < times; t++) segs.push(v);
+      }
+    }
+    return segs;
+  }
+  function evalOrder(entries, player) {
+    var st = clonePlayerDef(player);
+    var total = 0;
+    for (var i = 0; i < entries.length; i++) {
+      var segs = entries[i].segments || [];
+      for (var j = 0; j < segs.length; j++) {
+        total += applySegmentToDef(st, segs[j]);
+        if (st.hp <= 0) return total;
+      }
+    }
+    return total;
+  }
+  /** 攻击组排序：贪心选边际伤害最大 + 相邻交换局部搜索（确定性） */
+  function orderAttacks(entries, player) {
+    if (entries.length <= 1) return entries.slice();
+    var remaining = entries.slice();
+    var ordered = [];
+    var st = clonePlayerDef(player);
+    while (remaining.length) {
+      var bestIdx = 0;
+      var bestGain = -1;
+      for (var i = 0; i < remaining.length; i++) {
+        var st2 = clonePlayerDef(st);
+        var gain = 0;
+        var segs = remaining[i].segments || [];
+        for (var j = 0; j < segs.length; j++) {
+          gain += applySegmentToDef(st2, segs[j]);
+          if (st2.hp <= 0) break;
+        }
+        if (gain > bestGain + 1e-9) { bestGain = gain; bestIdx = i; }
+      }
+      var chosen = remaining.splice(bestIdx, 1)[0];
+      ordered.push(chosen);
+      var chosenSegs = chosen.segments || [];
+      for (var k = 0; k < chosenSegs.length; k++) applySegmentToDef(st, chosenSegs[k]);
+    }
+    // 相邻交换局部搜索（只接受严格变好，保证确定性）
+    var improved = true;
+    var passes = 0;
+    while (improved && passes++ < 30) {
+      improved = false;
+      for (var m = 0; m + 1 < ordered.length; m++) {
+        var before = evalOrder(ordered, player);
+        var tmp = ordered[m];
+        ordered[m] = ordered[m + 1];
+        ordered[m + 1] = tmp;
+        var after = evalOrder(ordered, player);
+        if (after > before + 1e-9) {
+          improved = true;
+        } else {
+          var tmp2 = ordered[m];
+          ordered[m] = ordered[m + 1];
+          ordered[m + 1] = tmp2;
+        }
+      }
+    }
+    return ordered;
+  }
+
+  // ------------------------------------------------------------
+  // 回合调度（SPEC §10.11.3 R29）：AI.planTurn(S) → 本回合施展顺序（只推演）
+  //   返回 [{enemyId, skillId, group}]，确定性、无随机
+  // ------------------------------------------------------------
+  function planTurn(S) {
+    if (!S || !S.enemies) return [];
+    var entries = [];
+    var ei, e;
+    // ① 各敌人推算技能序列
+    for (ei = 0; ei < S.enemies.length; ei++) {
+      e = S.enemies[ei];
+      if (!e || !e.alive || (Number(e.hp) || 0) <= 0) continue;
+      if (e.kind === 'minion' && (Number(e.mcTurns) || 0) > 0) continue;
+      var marks = (e.intents && ((Number(e.intents.jq) || 0) + (Number(e.intents.bs) || 0) + (Number(e.intents.lh) || 0))) || 0;
+      if (marks <= 0) continue;
+      var seq = selectSequence(e, null);
+      for (var si = 0; si < seq.length; si++) {
+        entries.push({
+          enemyId: e.id,
+          skillId: seq[si].id,
+          skill: seq[si],
+          entity: e,
+          entityIndex: ei,
+          seqIndex: si,
+          groupInfo: skillGroup(seq[si])
+        });
+      }
+    }
+    // ② 估算「攻击组之前」的增益效果（组合/增益组的 allyDamageBuff 会影响后续攻击段）
+    var bonus = {};
+    for (ei = 0; ei < S.enemies.length; ei++) {
+      e = S.enemies[ei];
+      if (e) bonus[e.id] = Number(e.dmgBonus) || 0;
+    }
+    for (var bi = 0; bi < entries.length; bi++) {
+      var en = entries[bi];
+      if (en.groupInfo.group === 'attack') continue;
+      var effs = en.skill.effects || [];
+      for (var oi = 0; oi < effs.length; oi++) {
+        var op = effs[oi];
+        if (op.op !== 'allyDamageBuff') continue;
+        var v = Number(op.v) || 0;
+        for (var ti = 0; ti < S.enemies.length; ti++) {
+          var t = S.enemies[ti];
+          if (!t || !t.alive) continue;
+          if (op.unit && t.unitType !== op.unit) continue;
+          bonus[t.id] = (bonus[t.id] || 0) + v;
+        }
+      }
+    }
+    // ③ 分组：非攻击组按 rank/敌人顺序/技能顺序；攻击组做局部最优排序
+    var nonAttack = [];
+    var attacks = [];
+    for (var qi = 0; qi < entries.length; qi++) {
+      var entry = entries[qi];
+      if (entry.groupInfo.group === 'attack') {
+        entry.segments = attackSegments(entry.skill, bonus[entry.enemyId] || 0);
+        attacks.push(entry);
+      } else {
+        nonAttack.push(entry);
+      }
+    }
+    nonAttack.sort(function (a, b) {
+      if (a.groupInfo.rank !== b.groupInfo.rank) return a.groupInfo.rank - b.groupInfo.rank;
+      if (a.groupInfo.group === 'priority' && b.groupInfo.group === 'priority' &&
+        a.groupInfo.priority !== b.groupInfo.priority) {
+        return a.groupInfo.priority - b.groupInfo.priority;
+      }
+      if (a.entityIndex !== b.entityIndex) return a.entityIndex - b.entityIndex;
+      return a.seqIndex - b.seqIndex;
+    });
+    var orderedAttacks = orderAttacks(attacks, S.player || {});
+    var finalList = nonAttack.concat(orderedAttacks);
+    var out = [];
+    for (var fi = 0; fi < finalList.length; fi++) {
+      out.push({
+        enemyId: finalList[fi].enemyId,
+        skillId: finalList[fi].skillId,
+        group: finalList[fi].groupInfo.group
+      });
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------
+  // 旧路径：单个敌人用完自己的行动（引擎在无 planTurn/异常时回退用）
+  // ------------------------------------------------------------
+  function runAction(ctx, entity) {
+    var seq = selectSequence(entity, ctx.log);
+    var cast = 0;
+    for (var i = 0; i < seq.length; i++) {
+      if (ctx.over()) return;
+      if (castSkill(ctx, entity, seq[i])) cast++;
+    }
     if (cast === 0) {
       ctx.log('system', entity.name + ' 剩余标记不足以施展任何技能，意图作废');
     }
   }
 
   AI.runAction = runAction;
-  AI.executeOps = executeOps;
   AI.castSkill = castSkill;
+  AI.executeOps = executeOps;
   AI.skillScore = skillScore;
   AI.skillValue = skillValue;
   AI.describeSkill = describeSkill;
   AI.skillCost = skillCost;
+  AI.skillGroup = skillGroup;
+  AI.selectSequence = selectSequence;
+  AI.attackSegments = attackSegments;
+  AI.applySegmentToDef = applySegmentToDef;
+  AI.planTurn = planTurn;
 })(typeof window !== 'undefined' ? window : globalThis);

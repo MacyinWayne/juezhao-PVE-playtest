@@ -1177,10 +1177,19 @@
 
   // ------------------------------------------------------------
   // 敌方行动（引擎负责流程与顺序，具体 AI/op 在 enemy.js）
+  //   SPEC §10.11.3 R29：优先用 AI.planTurn(S) 的全局调度顺序执行；
+  //   无 AI / 异常时回退旧的「按敌人顺序 runAction」。
   // ------------------------------------------------------------
-  function runEnemyAction(S, BD, entity) {
-    if (!isAlive(entity) || S.stage === 'over') return;
-    // 揭示隐藏意图（记日志 + buff 事件；对外 action 后才能看到）
+  function findSkillById(skills, id) {
+    for (var i = 0; i < (skills || []).length; i++) {
+      if (skills[i].id === id) return skills[i];
+    }
+    return null;
+  }
+
+  /** 敌方单个单位的行动开始：揭示隐藏意图 / 清上回合防御 / 跳过受控与无意图 */
+  function enemyActionStart(S, entity) {
+    if (!isAlive(entity) || S.stage === 'over') return false;
     if (entity.hidden) {
       addLog(S, 'intent', entity.name + ' 揭示意图：' + (entity._label || entity.intentLabel || '？'));
       emitBuff(S, entity.name + ' 揭示意图：' + (entity._label || entity.intentLabel || '？'));
@@ -1194,19 +1203,69 @@
       entity.mcTurns -= 1;
       addLog(S, 'system', entity.name + ' 被操控，跳过行动');
       entity.intents = zeroMarks();
-      return;
+      return false;
     }
     if (sumMarks(entity.intents) <= 0) {
       addLog(S, 'system', entity.name + ' 无意图，跳过行动');
-      return;
+      return false;
     }
+    // 调度推演会静默跳过未知技能；这里补记 error（与旧 runAction 日志一致）
+    var planIds = entity._plan || [];
+    for (var i = 0; i < planIds.length; i++) {
+      if (!findSkillById(entity._skills || [], planIds[i])) {
+        addLog(S, 'error', '意图套组 plan 引用了未知技能：' + planIds[i] + '（' + entity.name + '）');
+      }
+    }
+    return true;
+  }
+
+  /** 敌方整个回合：行动开始预处理 → planTurn 调度执行（或回退） */
+  function executeEnemyTurn(S, BD) {
+    var snapshot = S.enemies.filter(isAlive);
+    var actors = [];
+    var i;
+    for (i = 0; i < snapshot.length && S.stage !== 'over'; i++) {
+      if (enemyActionStart(S, snapshot[i])) actors.push(snapshot[i]);
+    }
+    if (S.stage === 'over') return;
     var ai = JZ.ENEMY_AI;
-    if (!ai || typeof ai.runAction !== 'function') {
+    if (!ai || typeof ai.castSkill !== 'function') {
       addLog(S, 'error', '敌方 AI 未加载（js/enemy.js）');
       return;
     }
-    ai.runAction(makeCtx(S, BD, entity), entity);
-    entity.intents = zeroMarks(); // R12 未用完的标记作废
+    // ① 全局调度（R29）
+    var plan = null;
+    if (typeof ai.planTurn === 'function') {
+      try {
+        plan = ai.planTurn(S);
+      } catch (e) {
+        addLog(S, 'error', '敌方调度失败，回退默认顺序：' + (e && e.message ? e.message : e));
+        plan = null;
+      }
+    }
+    if (Array.isArray(plan)) {
+      var guard = 0;
+      for (i = 0; i < plan.length && S.stage !== 'over' && guard < 300; i++, guard++) {
+        var step = plan[i];
+        var ent = findEnemy(S, step.enemyId);
+        if (!ent) continue;
+        var skill = findSkillById(ent._skills || [], step.skillId);
+        if (!skill) {
+          addLog(S, 'error', '调度计划中的技能不存在：' + step.skillId + '（' + ent.name + '）');
+          continue;
+        }
+        ai.castSkill(makeCtx(S, BD, ent), ent, skill);
+      }
+    } else {
+      // ② 回退：按敌人顺序，各自执行原来的 plan+贪心整套行动
+      for (i = 0; i < actors.length && S.stage !== 'over'; i++) {
+        ai.runAction(makeCtx(S, BD, actors[i]), actors[i]);
+      }
+    }
+    // R12：未用完的意图标记作废
+    for (i = 0; i < S.enemies.length; i++) {
+      if (isAlive(S.enemies[i])) S.enemies[i].intents = zeroMarks();
+    }
   }
 
   // ------------------------------------------------------------
@@ -1658,7 +1717,22 @@
           if (!rt) return failChoice('目标已阵亡或不存在');
           routeTargetId = rt.id;
         }
-        return { ok: true, value: { route: choice.route, targetId: routeTargetId } };
+        // SPEC §10.11.1：路数=上/中/下 视为单体攻击招式 → 吃黑白错多目标
+        var routeExtras = [];
+        if (choice.route !== '特' && Array.isArray(choice.extraTargetIds) && choice.extraTargetIds.length) {
+          var routePrimary = routeTargetId || (aliveEnemies(S)[0] && aliveEnemies(S)[0].id) || null;
+          for (i = 0; i < choice.extraTargetIds.length; i++) {
+            var ret = alive(choice.extraTargetIds[i]);
+            if (!ret) return failChoice('额外目标已阵亡或不存在');
+            if (routePrimary && ret.id === routePrimary) return failChoice('额外目标不能与主目标相同');
+            if (routeExtras.indexOf(ret.id) >= 0) continue;
+            routeExtras.push(ret.id);
+          }
+          if (routeExtras.length > 2) return failChoice('额外目标最多 2 个（共 3 个目标）');
+        }
+        var routeValue = { route: choice.route, targetId: routeTargetId };
+        if (routeExtras.length) routeValue.extraTargetIds = routeExtras;
+        return { ok: true, value: routeValue };
       }
 
       case 'convert': {
@@ -1807,7 +1881,7 @@
           if (tid) ids.push(tid);
         }
       }
-      if (sel === 'enemy' && S.player.multiSplash && Array.isArray(value.extraTargetIds)) {
+      if (S.player.multiSplash && Array.isArray(value.extraTargetIds)) {
         for (i = 0; i < value.extraTargetIds.length; i++) {
           if (ids.indexOf(value.extraTargetIds[i]) < 0) ids.push(value.extraTargetIds[i]);
         }
@@ -1815,11 +1889,21 @@
       return ids;
     }
 
-    /** 黑白错多目标收集器（SPEC §10.5）：只在 multiSplash 且 select==='enemy' 时启用 */
+    /**
+     * 黑白错多目标收集器（SPEC §10.5 / §10.11.1）：
+     *   - 单体招式（select==='enemy'）
+     *   - 变轨弹（YJQ-AQ-14）且宣言路数 ≠ 特（上/中/下 视为单体攻击）
+     *   只在 multiSplash + 玩家选择了额外目标时启用
+     */
     function makeSplash(card, value) {
-      if (!S.player.multiSplash || card.select !== 'enemy') return null;
+      if (!S.player.multiSplash) return null;
+      var isSingleTarget = card.select === 'enemy';
+      var isVariantRoute = card.id === 'YJQ-AQ-14' && value.route && value.route !== '特';
+      if (!isSingleTarget && !isVariantRoute) return null;
       if (!Array.isArray(value.extraTargetIds) || !value.extraTargetIds.length) return null;
-      return { primaryId: value.targetId, extras: value.extraTargetIds.slice(), pending: [], effects: [] };
+      var primaryId = value.targetId || (aliveEnemies(S)[0] && aliveEnemies(S)[0].id);
+      if (!primaryId) return null;
+      return { primaryId: primaryId, extras: value.extraTargetIds.slice(), pending: [], effects: [] };
     }
 
     function playableCards() {
@@ -1995,13 +2079,9 @@
         addLog(S, 'turn', '—— 玩家回合结束（剩余手牌 ' + unplayed + ' 张已弃置）——');
         S.stage = 'enemy';
 
-        // b. 敌方行动：boss → 存活小怪（快照：本回合新召唤的不行动）
+        // b. 敌方行动（SPEC §10.11.3：全局调度顺序执行；新召唤的不行动）
         addLog(S, 'turn', '—— 敌方行动 ——');
-        var snapshot = S.enemies.filter(isAlive);
-        for (var i = 0; i < snapshot.length; i++) {
-          if (S.stage === 'over') break;
-          runEnemyAction(S, BD, snapshot[i]);
-        }
+        executeEnemyTurn(S, BD);
         if (S.stage === 'over') return { ok: true, events: finishAction(S) };
 
         // c. 胜负（伤害结算内已即时检查，这里再兜一次）

@@ -151,13 +151,14 @@
       ctx.log('system', '变轨弹：没有可攻击的目标');
       return;
     }
+    // SPEC §10.11.1：路数=上/中/下 视为单体攻击招式 → 吃黑白错多目标（不再 noSplash）
     if (route === '上') {
-      ctx.hitEnemy(tid, 5, 'normal', { noSplash: true });
+      ctx.hitEnemy(tid, 5, 'normal');
     } else if (route === '中') {
-      ctx.hitEnemy(tid, 1, 'normal', { noSplash: true });
-      ctx.hitEnemy(tid, 4, 'normal', { noSplash: true });
+      ctx.hitEnemy(tid, 1, 'normal');
+      ctx.hitEnemy(tid, 4, 'normal');
     } else {
-      for (var i = 0; i < 5; i++) ctx.hitEnemy(tid, 1, 'normal', { noSplash: true });
+      for (var i = 0; i < 5; i++) ctx.hitEnemy(tid, 1, 'normal');
     }
   };
 
