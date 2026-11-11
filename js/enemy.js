@@ -331,9 +331,10 @@
   }
 
   // ------------------------------------------------------------
-  // 选招推演（SPEC §10.11.3 第 1 步）：在自身剩余意图池内选出本回合技能序列
-  //   只推演、不执行；确定性（无随机，平手按数据顺序）
+  // 选招推演（SPEC §10.11.3 第 1 步 + §10.12 R30 策略感知）
+  //   在自身剩余意图池内选出本回合技能序列；只推演、不执行；确定性
   //   logFn 可选：fallback 路径下用于记录「plan 引用未知技能」
+  //   strategy：defensiveSpawner / aggressive / supportAggressive（缺省 aggressive）
   // ------------------------------------------------------------
   function canAffordMark(cost, marks) {
     cost = cost || {};
@@ -348,7 +349,42 @@
     marks.lh -= Number(cost.lh) || 0;
     return marks;
   }
-  function selectSequence(entity, logFn) {
+  /** R30：按单位+阶段取策略（boss 用 p1/p2，小怪用 unitType；缺省 aggressive） */
+  function strategyFor(S, entity) {
+    var st = (S && S._strategy) || {};
+    if (!entity) return 'aggressive';
+    if (entity.kind === 'boss') return (entity.phase === 2 ? st.p2 : st.p1) || 'aggressive';
+    return st[entity.unitType] || 'aggressive';
+  }
+  function isAttackSkill(skill) {
+    return skillGroup(skill).group === 'attack';
+  }
+  /** R30：策略化技能价值（一阶段 Boss 的 damage 技能价值调低/置后） */
+  function strategyScore(skill, strategy) {
+    var base = skillScore(skill);
+    if (strategy === 'defensiveSpawner') {
+      var g = skillGroup(skill).group;
+      if (g === 'attack') return base * 0.15;
+      if (g === 'defense') return base * 1.3;
+      return base * 1.6;
+    }
+    if (strategy === 'supportAggressive') {
+      var effs = skill.effects || [];
+      for (var i = 0; i < effs.length; i++) {
+        if (effs[i].op === 'allyDamageBuff' || effs[i].op === 'selfDamageBuff') return base * 1.5;
+      }
+      return base;
+    }
+    return base;
+  }
+  function hasAffordableNonAttack(skills, marks) {
+    for (var i = 0; i < skills.length; i++) {
+      if (!isAttackSkill(skills[i]) && canAffordMark(skills[i].cost, marks)) return true;
+    }
+    return false;
+  }
+  function selectSequence(entity, logFn, strategy) {
+    strategy = strategy || 'aggressive';
     var skills = (entity && entity._skills) || [];
     var plan = (entity && entity._plan) || [];
     var marks = {
@@ -359,17 +395,34 @@
     var out = [];
     var i;
     // ① plan：按顺序「尽量施展」
+    var planSkills = [];
     for (i = 0; i < plan.length; i++) {
       var sk = findSkill(skills, plan[i]);
       if (!sk) {
         if (typeof logFn === 'function') logFn('error', '意图套组 plan 引用了未知技能：' + plan[i] + '（' + entity.name + '）');
         continue;
       }
-      if (!canAffordMark(sk.cost, marks)) continue;
-      payMark(marks, sk.cost);
-      out.push(sk);
+      planSkills.push(sk);
     }
-    // ② 剩余标记：贪心补齐（价值 / 消耗最高，平手按数据顺序）
+    // R30 一阶段 Boss：plan 内部也先 召唤/治疗/增益/防御 → 攻击
+    if (strategy === 'defensiveSpawner') {
+      var nonAtkPlan = [];
+      var atkPlan = [];
+      for (i = 0; i < planSkills.length; i++) {
+        if (isAttackSkill(planSkills[i])) atkPlan.push(planSkills[i]);
+        else nonAtkPlan.push(planSkills[i]);
+      }
+      planSkills = nonAtkPlan.concat(atkPlan);
+    }
+    for (i = 0; i < planSkills.length; i++) {
+      var ps = planSkills[i];
+      if (!canAffordMark(ps.cost, marks)) continue;
+      // R30：一阶段 Boss 的攻击只在没有其他可支付技能时补
+      if (strategy === 'defensiveSpawner' && isAttackSkill(ps) && hasAffordableNonAttack(skills, marks)) continue;
+      payMark(marks, ps.cost);
+      out.push(ps);
+    }
+    // ② 剩余标记：贪心补齐（策略化价值 / 消耗最高，平手按数据顺序）
     var guard = 0;
     while (guard++ < MAX_LOOPS) {
       var usable = [];
@@ -377,10 +430,15 @@
         if (canAffordMark(skills[i].cost, marks)) usable.push(skills[i]);
       }
       if (!usable.length) break;
+      if (strategy === 'defensiveSpawner') {
+        var nonAtk = [];
+        for (i = 0; i < usable.length; i++) if (!isAttackSkill(usable[i])) nonAtk.push(usable[i]);
+        if (nonAtk.length) usable = nonAtk; // 攻击仅在无其他可支付技能时补
+      }
       var best = usable[0];
-      var bestScore = skillScore(usable[0]);
+      var bestScore = strategyScore(usable[0], strategy);
       for (i = 1; i < usable.length; i++) {
-        var sc = skillScore(usable[i]);
+        var sc = strategyScore(usable[i], strategy);
         if (sc > bestScore + 1e-9) { best = usable[i]; bestScore = sc; }
       }
       payMark(marks, best.cost);
@@ -456,6 +514,7 @@
     while (remaining.length) {
       var bestIdx = 0;
       var bestGain = -1;
+      var bestFirstSeg = Infinity;
       for (var i = 0; i < remaining.length; i++) {
         var st2 = clonePlayerDef(st);
         var gain = 0;
@@ -464,7 +523,15 @@
           gain += applySegmentToDef(st2, segs[j]);
           if (st2.hp <= 0) break;
         }
-        if (gain > bestGain + 1e-9) { bestGain = gain; bestIdx = i; }
+        var firstSeg = segs.length ? segs[0] : 0;
+        // 边际伤害相同（如闪避把各攻击都挡成 0）时：优先「首段更小」的招式先吃闪避/化劲，
+        // 这是让总伤害最大的关键 tie-break；仍平手则保持数据顺序（确定性）
+        if (gain > bestGain + 1e-9 ||
+          (Math.abs(gain - bestGain) <= 1e-9 && firstSeg < bestFirstSeg - 1e-9)) {
+          bestGain = gain;
+          bestFirstSeg = firstSeg;
+          bestIdx = i;
+        }
       }
       var chosen = remaining.splice(bestIdx, 1)[0];
       ordered.push(chosen);
@@ -495,21 +562,24 @@
   }
 
   // ------------------------------------------------------------
-  // 回合调度（SPEC §10.11.3 R29）：AI.planTurn(S) → 本回合施展顺序（只推演）
+  // 回合调度（SPEC §10.11.3 R29 + §10.12 R30）：AI.planTurn(S) → 本回合施展顺序
+  //   策略：defensiveSpawner（一阶段 Boss）自保+招怪，攻击延后且不局部最优；
+  //         aggressive 攻击组局部最优；supportAggressive 蟹将 buff 先手。
   //   返回 [{enemyId, skillId, group}]，确定性、无随机
   // ------------------------------------------------------------
   function planTurn(S) {
     if (!S || !S.enemies) return [];
     var entries = [];
     var ei, e;
-    // ① 各敌人推算技能序列
+    // ① 各敌人推算技能序列（按策略调价值/顺序）
     for (ei = 0; ei < S.enemies.length; ei++) {
       e = S.enemies[ei];
       if (!e || !e.alive || (Number(e.hp) || 0) <= 0) continue;
       if (e.kind === 'minion' && (Number(e.mcTurns) || 0) > 0) continue;
       var marks = (e.intents && ((Number(e.intents.jq) || 0) + (Number(e.intents.bs) || 0) + (Number(e.intents.lh) || 0))) || 0;
       if (marks <= 0) continue;
-      var seq = selectSequence(e, null);
+      var strat = strategyFor(S, e);
+      var seq = selectSequence(e, null, strat);
       for (var si = 0; si < seq.length; si++) {
         entries.push({
           enemyId: e.id,
@@ -518,6 +588,7 @@
           entity: e,
           entityIndex: ei,
           seqIndex: si,
+          strategy: strat,
           groupInfo: skillGroup(seq[si])
         });
       }
@@ -544,14 +615,18 @@
         }
       }
     }
-    // ③ 分组：非攻击组按 rank/敌人顺序/技能顺序；攻击组做局部最优排序
+    // ③ 分组：非攻击组按 rank/敌人顺序/技能顺序；
+    //    攻击组：普通单位做局部最优；defensiveSpawner（一阶段 Boss）的攻击
+    //    延后到所有其他单位攻击之后，且保持数据顺序（不做局部最优）。
     var nonAttack = [];
     var attacks = [];
+    var deferredAttacks = [];
     for (var qi = 0; qi < entries.length; qi++) {
       var entry = entries[qi];
       if (entry.groupInfo.group === 'attack') {
         entry.segments = attackSegments(entry.skill, bonus[entry.enemyId] || 0);
-        attacks.push(entry);
+        if (entry.strategy === 'defensiveSpawner') deferredAttacks.push(entry);
+        else attacks.push(entry);
       } else {
         nonAttack.push(entry);
       }
@@ -566,7 +641,11 @@
       return a.seqIndex - b.seqIndex;
     });
     var orderedAttacks = orderAttacks(attacks, S.player || {});
-    var finalList = nonAttack.concat(orderedAttacks);
+    deferredAttacks.sort(function (a, b) {
+      if (a.entityIndex !== b.entityIndex) return a.entityIndex - b.entityIndex;
+      return a.seqIndex - b.seqIndex;
+    });
+    var finalList = nonAttack.concat(orderedAttacks, deferredAttacks);
     var out = [];
     for (var fi = 0; fi < finalList.length; fi++) {
       out.push({
@@ -582,7 +661,8 @@
   // 旧路径：单个敌人用完自己的行动（引擎在无 planTurn/异常时回退用）
   // ------------------------------------------------------------
   function runAction(ctx, entity) {
-    var seq = selectSequence(entity, ctx.log);
+    var strat = (typeof ctx.strategyOf === 'function') ? ctx.strategyOf(entity) : 'aggressive';
+    var seq = selectSequence(entity, ctx.log, strat);
     var cast = 0;
     for (var i = 0; i < seq.length; i++) {
       if (ctx.over()) return;
@@ -604,5 +684,7 @@
   AI.selectSequence = selectSequence;
   AI.attackSegments = attackSegments;
   AI.applySegmentToDef = applySegmentToDef;
+  AI.strategyFor = strategyFor;
+  AI.strategyScore = strategyScore;
   AI.planTurn = planTurn;
 })(typeof window !== 'undefined' ? window : globalThis);

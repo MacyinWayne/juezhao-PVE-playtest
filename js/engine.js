@@ -408,6 +408,18 @@
     }
     return null;
   }
+
+  /** SPEC §10.12 R30：把 boss.strategy 归一化成只含 p1/p2/shrimp/crab 的映射 */
+  function normalizeStrategy(raw) {
+    var out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    var keys = ['p1', 'p2', 'shrimp', 'crab'];
+    for (var i = 0; i < keys.length; i++) {
+      if (typeof raw[keys[i]] === 'string' && raw[keys[i]]) out[keys[i]] = raw[keys[i]];
+    }
+    return out;
+  }
+
   function aliveEnemies(S) {
     return S.enemies.filter(isAlive);
   }
@@ -456,6 +468,7 @@
       _stats: null,
       _aiId: null,
       _learningRecorded: false,
+      _strategy: null,
       _icePoints: 0,
       _pending: { playLimit: 0, routeLock: 0, dmgMinus: 0, dmgMinusTurns: 1 },
       _manualsUsedThisTurn: 0,
@@ -517,6 +530,8 @@
       _aiId: null,
       _stats: null,
       _learningRecorded: false,
+      // R30：敌方分单位/分阶段策略（SPEC §10.12）
+      _strategy: normalizeStrategy(bossData && bossData.strategy),
       _icePoints: 0,
       _pending: { playLimit: 0, routeLock: 0, dmgMinus: 0, dmgMinusTurns: 1 },
       _manualsUsedThisTurn: 0,
@@ -654,6 +669,14 @@
   // ------------------------------------------------------------
   // 召唤
   // ------------------------------------------------------------
+  /** R31：场上小怪上限（boss.maxMinions；缺失/非法时默认 6） */
+  function maxMinionsOf(bossData) {
+    var v = bossData ? bossData.maxMinions : undefined;
+    var n = Number(v);
+    if (!isFinite(n) || Math.floor(n) !== n || n < 0) return 6;
+    return n;
+  }
+
   function summonUnits(S, bossData, unitType, count) {
     var defs = (bossData && bossData.minions) || {};
     var def = defs[unitType];
@@ -661,8 +684,16 @@
       addLog(S, 'error', '未知召唤单位：' + unitType);
       return [];
     }
+    var cap = maxMinionsOf(bossData);
     var made = [];
-    for (var i = 0; i < (count || 1); i++) {
+    var wanted = Math.max(0, Math.floor(Number(count) || 0));
+    for (var i = 0; i < wanted; i++) {
+      // R31：场上存活小怪达到上限 → 不再召唤（记 system 日志，不报错）
+      var aliveNow = aliveMinions(S).length;
+      if (aliveNow >= cap) {
+        addLog(S, 'system', '场上小怪已达上限（' + cap + '），不再召唤');
+        break;
+      }
       S._unitSeq[unitType] = (S._unitSeq[unitType] || 0) + 1;
       var seq = S._unitSeq[unitType];
       S._minionSeq += 1;
@@ -1287,6 +1318,14 @@
       rng: function () { return nextRandom(S); },
       log: function (kind, text) { addLog(S, kind, text); },
       over: function () { return S.stage === 'over'; },
+
+      // R30：按单位+阶段取策略（boss 用 p1/p2，小怪用 unitType；缺省 aggressive）
+      strategyOf: function (e) {
+        var st = S._strategy || {};
+        if (!e) return 'aggressive';
+        if (e.kind === 'boss') return (e.phase === 2 ? st.p2 : st.p1) || 'aggressive';
+        return st[e.unitType] || 'aggressive';
+      },
 
       // ---- 实体 ----
       enemies: function () { return aliveEnemies(S); },
@@ -2180,6 +2219,11 @@
       try { JZ.AILearning.load(S._aiId); } catch (e) { /* 静默降级 */ }
     }
     var D = resolveData();
+    // R30：旧存档没有 _strategy → 从当前 boss 数据补
+    if (!S._strategy || typeof S._strategy !== 'object') {
+      var bd = battleData(S, D || FALLBACK_DATA);
+      S._strategy = normalizeStrategy(bd.boss && bd.boss.strategy);
+    }
     return makeBattle(S, D || FALLBACK_DATA);
   };
 
@@ -2258,6 +2302,8 @@
     emit: emit,
     cardRoleOf: cardRoleOf,
     archetypeOfIntentSet: archetypeOfIntentSet,
-    finalizeLearning: finalizeLearning
+    finalizeLearning: finalizeLearning,
+    maxMinionsOf: maxMinionsOf,
+    summonUnits: summonUnits
   };
 })(typeof window !== 'undefined' ? window : globalThis);

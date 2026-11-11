@@ -47,11 +47,11 @@
      "lh": 7
     },
     "hidden": true,
-    "weight": 1,
+    "weight": 5,
     "plan": [
      "callShrimp",
+     "callShrimp",
      "healingTide",
-     "slipFin",
      "slipFin"
     ]
    },
@@ -64,7 +64,7 @@
      "lh": 4
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 3,
     "plan": [
      "waterArrow",
      "waterArrow",
@@ -81,12 +81,11 @@
      "lh": 2
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 4,
     "plan": [
      "thickScale",
      "scaleArmor",
-     "slipFin",
-     "waterArrow"
+     "callShrimp"
     ]
    },
    {
@@ -98,7 +97,7 @@
      "lh": 4
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 3,
     "plan": [
      "healingTide",
      "slipFin",
@@ -114,7 +113,7 @@
      "lh": 0
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 1,
     "plan": [
      "waterArrow",
      "waterArrow",
@@ -132,7 +131,7 @@
      "lh": 3
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 3,
     "plan": [
      "waterArrow",
      "callShrimp",
@@ -170,7 +169,7 @@
      "lh": 0
     },
     "hidden": true,
-    "weight": 1,
+    "weight": 3,
     "plan": [
      "maw",
      "steelBulwark",
@@ -187,7 +186,7 @@
      "lh": 4
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 4,
     "plan": [
      "maw",
      "frenzyBite",
@@ -221,7 +220,7 @@
      "lh": 4
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 1,
     "plan": [
      "tideRevive",
      "swimShark",
@@ -237,7 +236,7 @@
      "lh": 2
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 3,
     "plan": [
      "frenzyBite",
      "steelBulwark",
@@ -254,7 +253,7 @@
      "lh": 3
     },
     "hidden": false,
-    "weight": 2,
+    "weight": 1,
     "plan": [
      "reverseMirage",
      "frenzyBite",
@@ -271,7 +270,7 @@
      "lh": 0
     },
     "hidden": true,
-    "weight": 1,
+    "weight": 3,
     "plan": [
      "maw",
      "maw",
@@ -599,7 +598,7 @@
       "lh": 0
      },
      "hidden": false,
-     "weight": 2,
+     "weight": 4,
      "plan": [
       "shrimpStab",
       "shrimpStab",
@@ -615,7 +614,7 @@
       "lh": 0
      },
      "hidden": false,
-     "weight": 2,
+     "weight": 1,
      "plan": [
       "shellHard",
       "shellHard",
@@ -709,7 +708,7 @@
       "lh": 0
      },
      "hidden": false,
-     "weight": 2,
+     "weight": 3,
      "plan": [
       "crabSmash",
       "crabSmash",
@@ -740,7 +739,7 @@
       "lh": 1
      },
      "hidden": false,
-     "weight": 2,
+     "weight": 4,
      "plan": [
       "ironWall",
       "crabSmash",
@@ -756,7 +755,7 @@
       "lh": 2
      },
      "hidden": false,
-     "weight": 2,
+     "weight": 1,
      "plan": [
       "ironWall",
       "shellHard",
@@ -880,5 +879,13 @@
     }
    ]
   }
- }
+ },
+ "strategy": {
+  "p1": "defensiveSpawner",
+  "p2": "aggressive",
+  "shrimp": "aggressive",
+  "crab": "supportAggressive",
+  "note": "作者 2026-11-11：一审自保+招怪——让玩家陷入『我要用骤雨入冥清场』的误区就是罐中鲨的胜利；二审靠假血猛攻；虾兵猛攻；蟹将先给虾兵buff再猛攻。保留随机；maxMinions=6 防 UI/战局极端。"
+ },
+ "maxMinions": 6
 }
