@@ -254,6 +254,39 @@
   function manualIds(deck) {
     return ((deck && deck.manuals) || []).map(function (m) { return m.id; });
   }
+  function deckManualById(deck, id) {
+    var list = (deck && deck.manuals) || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  /**
+   * SPEC §10.14 R32：按模式取本局秘笈 id 列表
+   *   standard：排除 mode==='extreme' 的秘笈（标准 5 张）
+   *   extreme ：在标准列表基础上，把 replaceManual 原位替换成 manualId（保持顺序，仍 5 张）
+   */
+  function manualIdsForMode(deck, mode, extremeCfg) {
+    var all = (deck && deck.manuals) || [];
+    var ids = [];
+    var i;
+    for (i = 0; i < all.length; i++) {
+      if (all[i].mode === 'extreme') continue;
+      ids.push(all[i].id);
+    }
+    if (mode === 'extreme' && extremeCfg) {
+      var rep = extremeCfg.replaceManual;
+      var mid = extremeCfg.manualId;
+      if (rep && mid && deckManualById(deck, mid)) {
+        var idx = ids.indexOf(rep);
+        if (idx >= 0) ids[idx] = mid;
+        else ids.push(mid);
+      }
+    }
+    return ids;
+  }
+  function appendNote(a, b) {
+    if (!a) return b;
+    return a + '；' + b;
+  }
 
   /** 挑战清单（无数据时返回空） */
   function challengeLists(D) {
@@ -295,13 +328,18 @@
   }
 
   /**
-   * 解析开局配置（SPEC §10.3）：
+   * 解析开局配置（SPEC §10.3 + §10.14 R32 模式）：
    *   challengeId 指定 → 找对应挑战；否则取第一条 status==='open'；
    *   找不到 / 数据缺失 → 回退默认 cards/boss，并在 state.log 记 system。
+   *   mode：缺省/非法 → standard；extreme 仅在 challenge.extreme 存在且替换秘笈可用时生效。
    */
   function resolveBattleSetup(D, opts) {
     opts = opts || {};
-    var out = { deck: null, boss: null, challenge: null, deckId: null, bossId: null, note: '' };
+    var out = {
+      deck: null, boss: null, challenge: null, deckId: null, bossId: null,
+      note: '', mode: 'standard', extreme: null
+    };
+    var reqMode = (opts.mode === 'extreme') ? 'extreme' : 'standard'; // 缺省/非法 → standard
     var lists = challengeLists(D);
     var ch = null;
     var i;
@@ -327,15 +365,32 @@
         out.challenge = buildChallengeSnapshot(D, ch);
         out.deckId = ch.deckId;
         out.bossId = ch.bossId;
+        // R32：极限模式校验
+        if (reqMode === 'extreme') {
+          var ex = ch.extreme;
+          var okExtreme = !!(ex && typeof ex === 'object' && ex.replaceManual && ex.manualId &&
+            deckManualById(deck, ex.manualId));
+          if (okExtreme) {
+            out.mode = 'extreme';
+            out.extreme = clone(ex);
+          } else {
+            out.note = appendNote(out.note, '该挑战不支持极限模式（缺少 extreme 配置），已回退标准模式');
+          }
+        }
         return out;
       }
       out.note = '挑战「' + ch.id + '」的卡组/Boss 数据缺失，回退默认卡组/Boss';
+    }
+    if (reqMode === 'extreme') {
+      out.note = appendNote(out.note, '无法启用极限模式，已回退标准模式');
     }
     out.deck = (D && D.cards) || null;
     out.boss = (D && D.boss) || null;
     out.challenge = null;
     out.deckId = null;
     out.bossId = null;
+    out.mode = 'standard';
+    out.extreme = null;
     return out;
   }
 
@@ -469,6 +524,7 @@
       _aiId: null,
       _learningRecorded: false,
       _strategy: null,
+      _mode: 'standard',
       _icePoints: 0,
       _pending: { playLimit: 0, routeLock: 0, dmgMinus: 0, dmgMinusTurns: 1 },
       _manualsUsedThisTurn: 0,
@@ -503,7 +559,7 @@
         maxHp: maxHp,
         block: 0, dodge: 0, hua: 0,
         deck: [], hand: [], discard: [],
-        manuals: manualIds(cardsData).map(function (id) { return { id: id, used: false }; }),
+        manuals: manualIdsForMode(cardsData, setup.mode, setup.extreme).map(function (id) { return { id: id, used: false }; }),
         routeHistory: [],
         playedThisTurn: [],
         playLimit: Number(pdata.playLimit) || 5,
@@ -532,6 +588,8 @@
       _learningRecorded: false,
       // R30：敌方分单位/分阶段策略（SPEC §10.12）
       _strategy: normalizeStrategy(bossData && bossData.strategy),
+      // R32：模式（'standard' | 'extreme'，SPEC §10.14）
+      _mode: setup.mode || 'standard',
       _icePoints: 0,
       _pending: { playLimit: 0, routeLock: 0, dmgMinus: 0, dmgMinusTurns: 1 },
       _manualsUsedThisTurn: 0,
@@ -615,6 +673,9 @@
     if (setup.note) addLog(S, 'system', setup.note);
     if (setup.challenge) {
       addLog(S, 'system', '挑战：' + setup.challenge.name + '（' + setup.challenge.code + '）');
+    }
+    if (S._mode === 'extreme') {
+      addLog(S, 'system', '模式：极限模式（千手归一已替换为万法皆通）');
     }
     addLog(S, 'phase', '战斗开始：' + bossName + ' vs ' + S.player.name);
     addLog(S, 'system', bossName + ' HP ' + boss.hp + '/' + boss.maxHp +
@@ -923,7 +984,12 @@
     S.endReason = reason || '';
     if (winner === 'player') addLog(S, 'win', '胜利：' + (reason || '敌人被击败'));
     else addLog(S, 'lose', '战败：' + (reason || '易金权被击败'));
-    emit(S, 'battle-end', { winner: winner, reason: S.endReason });
+    emit(S, 'battle-end', {
+      winner: winner,
+      reason: S.endReason,
+      mode: S._mode || 'standard',
+      qianshouUsed: !!(S._stats && S._stats.qianshouUsed)
+    });
     finalizeLearning(S, winner); // R25：记录本局（只记录一次）
   }
   function checkEnd(S) {
@@ -1837,6 +1903,9 @@
       stage: S.stage,
       winner: S.winner,
       endReason: S.endReason,
+      // R32：模式与「本局是否用过千手归一」（UI 解锁/展示用）
+      mode: S._mode || 'standard',
+      qianshouUsed: !!(S._stats && S._stats.qianshouUsed),
       // v1.1：当前挑战（旧数据/回退时可能为 null）
       challenge: S._challenge ? S._challenge : null,
       player: {
@@ -2224,6 +2293,8 @@
       var bd = battleData(S, D || FALLBACK_DATA);
       S._strategy = normalizeStrategy(bd.boss && bd.boss.strategy);
     }
+    // R32：旧存档没有 _mode → standard
+    if (S._mode !== 'extreme') S._mode = 'standard';
     return makeBattle(S, D || FALLBACK_DATA);
   };
 

@@ -50,7 +50,16 @@
      "line": "器若流星似千手，无我无形终归一。"
     }
    ],
-   "quote": "罐碎潮平，鲨首伏诛。"
+   "quote": "罐碎潮平，鲨首伏诛。",
+   "extreme": {
+    "name": "极限模式",
+    "unlock": "qianshou_win",
+    "unlockHint": "用「千手归一」通关一次后解锁",
+    "replaceManual": "YJQ-MJ-05",
+    "manualId": "YJQ-MJ-05E",
+    "name2": "万法皆通",
+    "desc": "禁用千手归一；千手归一替换为「万法皆通」：对所有敌人造成 20 点真实必中伤害。"
+   }
   }
  ],
  "upcoming": [

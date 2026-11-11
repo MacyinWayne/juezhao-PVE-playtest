@@ -20,6 +20,8 @@
   var SAVE_KEY = K.save || (typeof window.JZ_SHARK_SAVE_KEY === 'string' && window.JZ_SHARK_SAVE_KEY) || 'jz_shark_save_v1';
   var META_KEY = K.meta || 'jz_shark_save_meta_v1';
   var RECORDS_KEY = K.records || 'jz_shark_records_v1';
+  var UNLOCK_KEY = K.unlock || 'jz_shark_unlock_v1';
+  var MODE_KEY = K.mode || 'jz_shark_mode_v1';
   var TUTORIAL_KEY = K.tutorial || (typeof window.JZ_SHARK_TUTORIAL_KEY === 'string' && window.JZ_SHARK_TUTORIAL_KEY) || 'jz_shark_tutorial_v1';
   var DEFENSE_KEY = K.defense || 'jz_shark_defense_tip_v1';
 
@@ -156,6 +158,8 @@
     blogExpanded: false,
     tutorialDone: false,
     tutorialIndex: 0,
+    pendingMode: 'standard',
+    pendingUnlockToast: false,
     resultShown: false,
     resultRecorded: false,
     ghostTurns: {},
@@ -538,6 +542,7 @@
       cast: (raw && raw.cast) || b.cast || [],
       quote: (raw && raw.quote) || b.quote || '',
       goal: (raw && raw.goal) || b.goal || '',
+      extreme: (raw && raw.extreme) || b.extreme || null,
       deckName: b.deckName || deck.name || '',
       bossName: b.bossName || bs.name || ''
     };
@@ -548,30 +553,129 @@
     return ui.currentChallenge;
   }
 
-  /* ------------------------------------------------------ 存档 / 本地记录 */
-  function readRecords() { var r = readJSON('localStorage', RECORDS_KEY); return (r && typeof r === 'object') ? r : {}; }
-  function writeRecords(r) { writeJSON('localStorage', RECORDS_KEY, r); }
-  function recordAttempt(id) {
-    var r = readRecords();
-    var rec = r[id] || { attempts: 0, wins: 0, bestTurns: 0 };
-    rec.attempts += 1;
-    r[id] = rec; writeRecords(r);
+  /* ------------------------------------------------ 极限模式：解锁 / 选择 */
+  function readUnlockMap() { var o = readJSON('localStorage', UNLOCK_KEY); return (o && typeof o === 'object') ? o : {}; }
+  function isExtremeUnlocked(id) {
+    if (!id) return false;
+    try { var u = readUnlockMap(); return !!(u[id] && u[id].extreme); } catch (e) { return false; }
   }
-  function recordResult(id, win, turns) {
+  function unlockExtreme(id) {
+    if (!id) return false;
+    try {
+      var u = readUnlockMap();
+      if (u[id] && u[id].extreme) return false;
+      if (!u[id] || typeof u[id] !== 'object') u[id] = {};
+      u[id].extreme = true;
+      writeJSON('localStorage', UNLOCK_KEY, u);
+      return true;
+    } catch (e) { return false; }
+  }
+  function readModeMap() { var o = readJSON('localStorage', MODE_KEY); return (o && typeof o === 'object') ? o : {}; }
+  function selectedMode(id) {
+    try {
+      var m = readModeMap();
+      if (m[id] === 'extreme' && isExtremeUnlocked(id)) return 'extreme';
+    } catch (e) { }
+    return 'standard';
+  }
+  function setSelectedMode(id, mode) {
+    if (!id) return;
+    try {
+      var m = readModeMap();
+      m[id] = (mode === 'extreme' && isExtremeUnlocked(id)) ? 'extreme' : 'standard';
+      writeJSON('localStorage', MODE_KEY, m);
+    } catch (e) { }
+  }
+  function battleMode(st) {
+    return (st && st.mode === 'extreme') ? 'extreme' : 'standard';
+  }
+  function currentBattleMode() {
+    if (ui.battle && ui.battle.state) return battleMode(ui.battle.state);
+    return ui.pendingMode === 'extreme' ? 'extreme' : 'standard';
+  }
+  function extremeInfo(ch) {
+    var ex = ch && ch.extreme;
+    return (ex && typeof ex === 'object') ? ex : null;
+  }
+  function extremeUnlockHint(ch) {
+    var ex = extremeInfo(ch);
+    return (ex && ex.unlockHint) ? ex.unlockHint : '用「千手归一」通关一次后解锁';
+  }
+  function extremeDesc(ch) {
+    var ex = extremeInfo(ch);
+    return (ex && ex.desc) ? ex.desc : '禁用千手归一；千手归一替换为「万法皆通」：对所有敌人造成 20 点真实必中伤害。';
+  }
+  function modeLabel(mode) { return mode === 'extreme' ? '极限' : '标准'; }
+
+  /* ------------------------------------------------------ 存档 / 本地记录 */
+  function emptyModeRec() { return { attempts: 0, wins: 0, bestTurns: 0 }; }
+  function normalizeRecords(raw) {
+    var out = {}, changed = false, any = false;
+    if (!raw || typeof raw !== 'object') return { records: out, changed: false };
+    for (var id in raw) {
+      if (!Object.prototype.hasOwnProperty.call(raw, id)) continue;
+      var rec = raw[id];
+      if (!rec || typeof rec !== 'object') continue;
+      any = true;
+      var hasModes = !!(rec.standard || rec.extreme);
+      var flat = (typeof rec.attempts === 'number' || typeof rec.wins === 'number' || typeof rec.bestTurns === 'number');
+      if (hasModes) {
+        out[id] = {
+          standard: rec.standard || emptyModeRec(),
+          extreme: rec.extreme || emptyModeRec()
+        };
+        if (!rec.standard || !rec.extreme) changed = true;
+      } else if (flat) {
+        out[id] = { standard: { attempts: num(rec.attempts, 0), wins: num(rec.wins, 0), bestTurns: num(rec.bestTurns, 0) }, extreme: emptyModeRec() };
+        changed = true;
+      } else {
+        out[id] = rec;
+      }
+    }
+    return { records: out, changed: changed && any };
+  }
+  function readRecords() {
+    var raw = readJSON('localStorage', RECORDS_KEY);
+    var n = normalizeRecords(raw);
+    if (n.changed) writeJSON('localStorage', RECORDS_KEY, n.records);
+    return n.records;
+  }
+  function writeRecords(r) { writeJSON('localStorage', RECORDS_KEY, r); }
+  function recordOf(id, mode) {
     var r = readRecords();
-    var rec = r[id] || { attempts: 0, wins: 0, bestTurns: 0 };
+    var rec = r[id];
+    if (!rec) return null;
+    var m = mode === 'extreme' ? 'extreme' : 'standard';
+    return (rec[m] && typeof rec[m] === 'object') ? rec[m] : null;
+  }
+  function ensureRecord(r, id, mode) {
+    if (!r[id]) r[id] = { standard: emptyModeRec(), extreme: emptyModeRec() };
+    var m = mode === 'extreme' ? 'extreme' : 'standard';
+    if (!r[id][m]) r[id][m] = emptyModeRec();
+    return r[id][m];
+  }
+  function recordAttempt(id, mode) {
+    var r = readRecords();
+    var rec = ensureRecord(r, id, mode);
+    rec.attempts += 1;
+    writeRecords(r);
+  }
+  function recordResult(id, win, turns, mode) {
+    var r = readRecords();
+    var rec = ensureRecord(r, id, mode);
     if (win) {
       rec.wins += 1;
       if (!rec.bestTurns || turns < rec.bestTurns) rec.bestTurns = turns;
     }
-    r[id] = rec; writeRecords(r);
+    writeRecords(r);
   }
-  function recordLine(id) {
-    var rec = readRecords()[id];
-    if (!rec || !rec.attempts) return '尚无记录';
+  function recordLine(id, mode) {
+    var m = mode === 'extreme' ? 'extreme' : 'standard';
+    var rec = recordOf(id, m);
+    if (!rec || !rec.attempts) return m === 'extreme' ? '极限 · 尚无记录' : '尚无记录';
     var s = challengeRecordLabel() + ' ' + rec.attempts + ' 次 · 胜 ' + rec.wins + ' 次';
     if (rec.bestTurns) s += ' · 最佳 ' + rec.bestTurns + ' 回合';
-    return s;
+    return (m === 'extreme' ? '极限 · ' : '') + s;
   }
 
   function saveNow() {
@@ -586,6 +690,7 @@
       challengeId: cv.id || ui.challengeId || '',
       challengeName: cv.name || '',
       code: cv.code || '',
+      mode: battleMode(ui.battle.state),
       turn: num(ui.battle.state.turn, 1),
       savedAt: Date.now && Date.now()
     });
@@ -606,7 +711,8 @@
       turn: num(S && S.turn, meta.turn || 1),
       challengeName: (ch && ch.name) || meta.challengeName || '',
       challengeCode: (ch && ch.code) || meta.code || '',
-      challengeId: (ch && ch.id) || meta.challengeId || ''
+      challengeId: (ch && ch.id) || meta.challengeId || '',
+      mode: (S && S.mode === 'extreme') ? 'extreme' : ((meta.mode === 'extreme') ? 'extreme' : 'standard')
     };
   }
 
@@ -730,9 +836,12 @@
     btitleWrap.appendChild(btopTitle);
     var chalChip = el('p', 'btop__chal', '');
     btitleWrap.appendChild(chalChip);
+    var modeBadge = el('span', 'mode-badge', '极限');
+    setHidden(modeBadge, true);
     bleft.appendChild(btitleWrap);
     btop.appendChild(bleft);
     var bright = el('div', 'btop__right');
+    bright.appendChild(modeBadge);
     var turnPill = el('span', 'pill pill--turn');
     turnPill.appendChild(el('span', 'pill__k', '回合'));
     var turnNum = el('b', 'pill__v', '1');
@@ -818,7 +927,7 @@
     ui.nodes = {
       app: app, bgArt: bg,
       menu: menuScreen, challenges: chalScreen, battle: battleScreen,
-      btop: btop, btopTitle: btopTitle, turnNum: turnNum, chalChip: chalChip, menuBtn: menuBtn, helpBtn: helpBtn,
+      btop: btop, btopTitle: btopTitle, turnNum: turnNum, chalChip: chalChip, modeBadge: modeBadge, menuBtn: menuBtn, helpBtn: helpBtn,
       stage: stage, enemies: enemiesZone, mid: midZone, demo: demoZone,
       blog: blogZone, blogList: blogList, blogToggle: blogToggle,
       player: playerZone, manuals: manualZone, hand: handZone,
@@ -893,7 +1002,7 @@
       cont.type = 'button';
       var contMain = el('span', 'btn--menu__main', '继续上局');
       var infoRaw = info.challengeId ? getChallengeById(info.challengeId) : null;
-      var contSub = el('span', 'btn--menu__sub', (infoRaw && infoRaw.scriptNo ? infoRaw.scriptNo + ' · ' : '') + (info.challengeName || '残局') + ' · 第 ' + info.turn + ' 回合');
+      var contSub = el('span', 'btn--menu__sub', (infoRaw && infoRaw.scriptNo ? infoRaw.scriptNo + ' · ' : '') + (info.challengeName || '残局') + (info.mode === 'extreme' ? ' · 极限' : '') + ' · 第 ' + info.turn + ' 回合');
       cont.appendChild(contMain); cont.appendChild(contSub);
       on(cont, 'click', continueSavedBattle);
       nav.appendChild(cont);
@@ -990,8 +1099,14 @@
     if (ch.duration) meta.appendChild(el('span', 'ch-card__meta-i', ch.duration));
     meta.appendChild(el('span', 'ch-card__record', open ? recordLine(ch.id) : '尚未开放'));
     card.appendChild(meta);
-    var chAi = aiStateFor(ch.id);
-    if (chAi && chAi.battles) card.appendChild(el('p', 'ch-card__ai', 'AI 已学习 ' + chAi.battles + ' 局'));
+    var chAi2 = aiStateFor(ch.id);
+    if (chAi2 && chAi2.battles) card.appendChild(el('p', 'ch-card__ai', 'AI 已学习 ' + chAi2.battles + ' 局'));
+    if (extremeInfo(ch)) {
+      var unlockedNow = isExtremeUnlocked(ch.id);
+      var exTag = el('span', 'tag tag--mode' + (unlockedNow ? ' is-on' : ' is-off'), unlockedNow ? '极限已解锁' : '极限 · 未解锁');
+      exTag.setAttribute('title', unlockedNow ? '可在剧本简介里切换极限模式' : extremeUnlockHint(ch));
+      card.appendChild(exTag);
+    }
     if (open) {
       on(card, 'click', function () { startChallengeWithBriefing(ch); });
     }
@@ -1016,7 +1131,7 @@
     showBriefing(ch);
   }
 
-  function startBattleWithChallenge(challengeId) {
+  function startBattleWithChallenge(challengeId, mode) {
     closeModal(true); closeOverlay(); closeLogDrawer(true);
     ui.handBuilt = false; ui.battle = null; ui.viewState = null;
     ui.playback = null; ui.busy = false; ui.resultShown = false; ui.resultRecorded = false;
@@ -1025,16 +1140,24 @@
     ui.blogExpanded = false;
     ui.challengeId = challengeId || '';
     ui.currentChallenge = challengeView(getChallengeById(challengeId));
+    var cvNow = ui.currentChallenge || {};
+    var wantMode = (mode === 'extreme') ? 'extreme' : (mode === 'standard' ? 'standard' : selectedMode(ui.challengeId));
+    if (wantMode === 'extreme' && !isExtremeUnlocked(ui.challengeId)) wantMode = 'standard';
+    if (wantMode === 'extreme' && !extremeInfo(cvNow)) wantMode = 'standard';
+    ui.pendingMode = wantMode;
 
     if (!engineReady()) { showFatal('战斗引擎未加载', '请确认 js/engine.js / js/cards.js / js/enemy.js 已就位后刷新。'); return; }
     var b = null;
-    try { b = window.JZ.startBattle({ challengeId: ui.challengeId || undefined }); } catch (e) { b = null; }
+    try { b = window.JZ.startBattle({ challengeId: ui.challengeId || undefined, mode: wantMode }); } catch (e) { b = null; }
     if (!b || !b.state || !b.state.player) { showFatal('战斗引擎启动失败', 'startBattle() 没有返回有效对局。'); return; }
     ui.battle = b;
     ui.currentChallenge = currentChallengeView() || ui.currentChallenge;
     clearSave();
     ui.prevLogLen = (b.state.log || []).length;
-    recordAttempt(ui.challengeId || (ui.currentChallenge && ui.currentChallenge.id) || 'shark');
+    var actualMode = battleMode(b.state);
+    ui.pendingMode = actualMode;
+    if (wantMode === 'extreme' && actualMode !== 'extreme') toast('极限模式暂未生效（引擎未就绪），本局按标准进行');
+    recordAttempt(ui.challengeId || (ui.currentChallenge && ui.currentChallenge.id) || 'shark', actualMode);
     showScreen('battle');
     renderBattle();
     saveNow();
@@ -1059,6 +1182,7 @@
     ui.handHint = ''; ui.manualHint = ''; ui.selectedIndex = null;
     ui.blogExpanded = false;
     ui.challengeId = info.challengeId || (b.state.challenge && b.state.challenge.id) || '';
+    ui.pendingMode = battleMode(b.state);
     ui.currentChallenge = currentChallengeView() || challengeView(getChallengeById(ui.challengeId)) || { name: info.challengeName };
     showScreen('battle');
     renderBattle();
@@ -1153,6 +1277,11 @@
     if (ui.nodes.btopTitle) ui.nodes.btopTitle.textContent = sys.name;
     if (ui.nodes.turnNum) ui.nodes.turnNum.textContent = String(num(s.turn, 1));
     if (ui.nodes.chalChip) ui.nodes.chalChip.textContent = challengeTitle(cv) + (cv.subtitle ? '　' + cv.subtitle : '');
+    if (ui.nodes.modeBadge) {
+      var exMode = battleMode(s) === 'extreme';
+      setHidden(ui.nodes.modeBadge, !exMode);
+      ui.nodes.modeBadge.textContent = '极限';
+    }
   }
 
   /* ------------------------------------------------------------ 倾向标记区 */
@@ -3061,6 +3190,10 @@
     helpSection(body, '· 战斗演示', '中间演示区逐招播放：招式名 + 剪影 + 目标 + 伤害/消耗意图。自动约 0.7 秒一步，点击演示区或空格加速，点「跳过」立即结算。完整记录仍在右下「日志」抽屉。');
     helpSection(body, '· 防御结算', '闪避（整段抵消，必中无视）→ 格挡（按点吸收，真实伤害无视）→ 化劲（一次性，扣减后清零）→ 扣血。点玩家区徽标可随时查看。');
     helpSection(body, '· 秘笈', '秘笈卡常驻显示完整效果；本回合已出牌的倾向顺序「包含」秘笈要求的连续序列即可触发（例：秘笈要「灵活→进取→灵活」，本回合打过「灵活 进取 灵活」即可）。每回合限 1 张，触发后翻面。');
+    var exChHelp = firstOpenChallenge();
+    if (extremeInfo(exChHelp)) {
+      helpSection(body, '· 极限模式', '用「千手归一」通关一次后解锁（只记在本机浏览器）。' + extremeDesc(exChHelp) + ' 解锁后可在剧本简介里切换标准 / 极限，记录与 AI 学习按模式分开。');
+    }
     helpSection(body, '· 二阶段与血量', 'Boss 与杂兵不显示具体血量数字；罐中鲨一阶段血量跨过节点会罐碎进入二阶段，假血并入主血条显示，清空后回到一阶段。');
     helpSection(body, '· 敌方 AI', '敌方 AI 会从本机对战记录中学习你的打法（防御/攻击/千手归一使用习惯），在后续对局里调整意图套组的权重；学习只发生在这台浏览器里，不联网、不汇总其他玩家。可在「制作信息」查看学习状态或重置。');
     helpSection(body, '· 存档与记录', '每次操作后自动存档（localStorage）；结算后清除存档，入局次数/胜场/最佳回合记在「战斗剧本列表」。');
@@ -3081,6 +3214,13 @@
     body.appendChild(el('p', 'about__line', '作者与卡牌设计：寒溟'));
     body.appendChild(el('p', 'about__line', '版本 v' + UI_VERSION + '（2026-11-11）'));
     body.appendChild(el('p', 'about__line', sys.footer));
+    var exChAbout = firstOpenChallenge();
+    if (extremeInfo(exChAbout)) {
+      var exUnlocked = isExtremeUnlocked(exChAbout.id);
+      body.appendChild(el('p', 'about__line about__line--extreme', '极限模式：' + (exUnlocked ? '已解锁' : '未解锁') +
+        (exUnlocked ? '（可在剧本简介切换）' : ' —— ' + extremeUnlockHint(exChAbout))));
+      if (exUnlocked) body.appendChild(el('p', 'about__line about__line--dim', extremeDesc(exChAbout)));
+    }
     var aiId = aiTargetChallengeId();
     var ai = aiStateFor(aiId);
     if (aiModule() && ai && !ai.error) {
@@ -3152,17 +3292,70 @@
       }
       body.appendChild(castBox);
     }
+    /* 极限模式：标准 / 极限 切换（数据驱动：challenge.extreme） */
+    var ex = extremeInfo(ch);
+    var modeSel = selectedMode(ch.id);
+    if (modeSel === 'extreme' && (!ex || !isExtremeUnlocked(ch.id))) modeSel = 'standard';
+    var modePick = modeSel;
+    var modeRow = null;
+    var modeBox = null;
+    var modeHintEl = null, modeDescEl = null;
+    if (ex) {
+      modeBox = el('div', 'brief__modes');
+      var modeHead = el('div', 'brief__modes-head');
+      modeHead.appendChild(el('h3', 'brief__modes-title', '模式'));
+      var modeState = el('span', 'brief__modes-state', '');
+      modeHead.appendChild(modeState);
+      modeBox.appendChild(modeHead);
+      var seg = el('div', 'mode-switch');
+      var stdBtn = el('button', 'mode-opt', '标准');
+      var exBtn = el('button', 'mode-opt', '极限');
+      stdBtn.type = 'button'; exBtn.type = 'button';
+      seg.appendChild(stdBtn); seg.appendChild(exBtn);
+      modeBox.appendChild(seg);
+      modeHintEl = el('p', 'brief__mode-hint', '');
+      modeDescEl = el('p', 'brief__mode-desc', '');
+      modeBox.appendChild(modeHintEl);
+      modeBox.appendChild(modeDescEl);
+      body.appendChild(modeBox);
+      modeRow = modeBox;
+      var paintMode = function () {
+        var unlocked = isExtremeUnlocked(ch.id);
+        if (modePick === 'extreme' && !unlocked) modePick = 'standard';
+        if (modePick === 'extreme') addClass(exBtn, 'is-selected'); else removeClass(exBtn, 'is-selected');
+        if (modePick === 'standard') addClass(stdBtn, 'is-selected'); else removeClass(stdBtn, 'is-selected');
+        exBtn.disabled = !unlocked;
+        addClass(exBtn, unlocked ? 'is-unlocked' : 'is-locked');
+        removeClass(exBtn, unlocked ? 'is-locked' : 'is-unlocked');
+        modeState.textContent = unlocked ? '极限已解锁' : '极限未解锁';
+        modeHintEl.textContent = unlocked ? '' : extremeUnlockHint(ch);
+        modeHintEl.hidden = unlocked;
+        modeDescEl.textContent = modePick === 'extreme' ? extremeDesc(ch) : '';
+        modeDescEl.hidden = modePick !== 'extreme';
+        if (recVal) recVal.textContent = recordLine(ch.id, modePick);
+      };
+      on(stdBtn, 'click', function () { modePick = 'standard'; setSelectedMode(ch.id, 'standard'); paintMode(); });
+      on(exBtn, 'click', function () {
+        if (!isExtremeUnlocked(ch.id)) { toast(extremeUnlockHint(ch)); return; }
+        modePick = 'extreme'; setSelectedMode(ch.id, 'extreme'); paintMode();
+      });
+    }
     var rows = el('div', 'brief__rows brief__rows--inline');
     if (ch.duration) rows.appendChild(briefRow('时长', ch.duration));
-    rows.appendChild(briefRow('记录', recordLine(ch.id)));
+    var recRow = el('div', 'brief__row');
+    recRow.appendChild(el('span', 'brief__row-k', '记录'));
+    var recVal = el('span', 'brief__row-v', recordLine(ch.id, modePick));
+    recRow.appendChild(recVal);
+    rows.appendChild(recRow);
     var briefAi = aiStateFor(ch.id);
     if (briefAi && briefAi.battles) rows.appendChild(el('span', 'brief__ai', 'AI 已学习 ' + briefAi.battles + ' 局'));
     body.appendChild(rows);
     if (ch.quote) body.appendChild(el('p', 'brief__quote', '「' + ch.quote + '」'));
+    if (modeBox) paintMode();
 
     var btns = [
       modalButton('返回', 'ghost', function () { closeModal(true); showScreen('challenges'); }),
-      modalButton('开始这场残局', 'primary', function () { closeModal(true); startBattleWithChallenge(ch.id); })
+      modalButton('开始这场残局', 'primary', function () { closeModal(true); startBattleWithChallenge(ch.id, modePick); })
     ];
     showModal({ title: challengeTitle(ch), subtitle: ch.subtitle || '剧本简介', body: body, buttons: btns });
   }
@@ -3222,20 +3415,28 @@
     clearSave();
     var cv = currentChallengeView() || {};
     var cid = cv.id || ui.challengeId || 'shark';
+    var resultMode = battleMode(s);
+    var justUnlocked = false;
     if (!ui.resultRecorded) {
       ui.resultRecorded = true;
-      recordResult(cid, s.winner === 'player', num(s.turn, 1));
+      recordResult(cid, s.winner === 'player', num(s.turn, 1), resultMode);
+      if (s.winner === 'player' && resultMode === 'standard' && s.qianshouUsed === true) {
+        justUnlocked = unlockExtreme(cid);
+        if (justUnlocked) ui.pendingUnlockToast = true;
+      }
     }
-    showResult(s);
+    showResult(s, { unlocked: justUnlocked });
   }
 
-  function showResult(s) {
+  function showResult(s, info) {
     var win = s.winner === 'player';
     var p = s.player || {};
     var cv = currentChallengeView() || {};
+    var exMode = battleMode(s) === 'extreme';
     var card = overlayCard('result ' + (win ? 'result--win' : 'result--lose'));
     card.appendChild(el('div', 'result__seal', win ? '胜' : '败'));
-    card.appendChild(el('p', 'overlay-kicker', win ? '一阶段血尽' : '潮声吞人'));
+    if (exMode) card.appendChild(el('span', 'result__mode', '极限模式'));
+    card.appendChild(el('p', 'overlay-kicker', win ? (exMode ? '极限 · 一阶段血尽' : '一阶段血尽') : (exMode ? '极限 · 潮声吞人' : '潮声吞人')));
     card.appendChild(el('h2', 'overlay-title', win ? '罐中鲨伏诛' : '千手散尽'));
     card.appendChild(el('p', 'overlay-text', win
       ? (cv.quote || '罐碎潮平，鲨首伏诛。')
@@ -3245,7 +3446,9 @@
     stats.appendChild(resultStat('回合数', String(num(s.turn, 1))));
     stats.appendChild(resultStat('易金权 HP', num(p.hp, 0) + ' / ' + num(p.maxHp, 40)));
     stats.appendChild(resultStat(cv.scriptNo || '剧本', cv.name || challengeTitle(cv)));
+    stats.appendChild(resultStat('模式', exMode ? '极限' : '标准'));
     card.appendChild(stats);
+    if (info && info.unlocked) card.appendChild(el('p', 'result__unlock', '解锁 · 极限模式'));
     var btns = el('div', 'overlay-btns');
     var again = el('button', 'btn btn--primary btn--lg', '再战一局');
     again.type = 'button';
@@ -3270,6 +3473,7 @@
   }
   function leaveResult(screen) {
     closeOverlay();
+    if (ui.pendingUnlockToast) { ui.pendingUnlockToast = false; toast('解锁 · 极限模式'); }
     ui.battle = null; ui.viewState = null; ui.playback = null; ui.busy = false;
     ui.resultShown = false; ui.resultRecorded = false;
     ui.handBuilt = false; ui.logRenderedLen = -1;
@@ -3292,7 +3496,10 @@
       version: UI_VERSION,
       refresh: function () { if (ui.battle) renderBattle(); return true; },
       __test: {
-        startBattle: function (id) { startBattleWithChallenge(id || (firstOpenChallenge() || {}).id || 'shark'); },
+        startBattle: function (id, mode) { startBattleWithChallenge(id || (firstOpenChallenge() || {}).id || 'shark', mode); },
+        selectedMode: selectedMode,
+        isExtremeUnlocked: isExtremeUnlocked,
+        setSelectedMode: setSelectedMode,
         showScreen: showScreen,
         showBriefing: function (id) { var ch = getChallengeById(id) || firstOpenChallenge(); if (ch) showBriefing(ch); },
         openChoice: function (select, cb) {
@@ -3349,6 +3556,9 @@
           stage: ui.battle ? ui.battle.state.stage : null,
           turn: ui.battle ? ui.battle.state.turn : null,
           challengeId: ui.challengeId || '',
+          mode: currentBattleMode(),
+          extremeUnlocked: isExtremeUnlocked(ui.challengeId || ((firstOpenChallenge() || {}).id || 'shark')),
+          qianshouUsed: !!(ui.battle && ui.battle.state && ui.battle.state.qianshouUsed),
           audioMuted: audio.muted,
           audioUnlocked: audio.unlocked,
           audioTrack: audio.current,
